@@ -1,0 +1,32 @@
+{
+  "app_name": "Door Display Helper",
+  "system_name": "CND1 Sectional Door",
+  "home": {
+    "title": "CND1 Door Helper",
+    "subtitle": "選擇你看到的顯示符號、輸入關鍵字，或選擇 D15 LED 閃爍次數。",
+    "buttons": {
+      "select_symbol": "選擇螢幕符號",
+      "search_keyword": "輸入關鍵字",
+      "d15_flash": "D15 LED 閃爍次數",
+      "procedures": "安裝 / 設定流程"
+    }
+  },
+  "search_placeholders": [
+    "stop",
+    "slack",
+    "wicket",
+    "photocell",
+    "E09",
+    "SER",
+    "D15 1",
+    "factory reset"
+  ],
+  "labels": {
+    "meaning": "意思",
+    "recommended_checks": "建議檢查",
+    "tools": "需要工具",
+    "source": "資料來源",
+    "priority": "優先級",
+    "safety_note": "安全提醒"
+  }
+}

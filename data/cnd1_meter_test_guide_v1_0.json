@@ -1,0 +1,412 @@
+{
+  "pack_id": "cnd1_meter_test_guide",
+  "version": "1.0",
+  "product_name": "CND1 Meter Test Guide",
+  "source_manual": {
+    "manual": "4230EN_Pro-Line-CND1_SW50.10_V1025.1_IND",
+    "file": "4230EN_Pro-Line-CND1_SW50.10_V1025.1_IND.pdf"
+  },
+  "meter_tests": [
+    {
+      "id": "cnd1_meter_stop_circuit_24v_sequence",
+      "category": "Stop circuit",
+      "title_en": "Stop circuit 24V sequence test",
+      "title_zh": "Stop circuit 24V 顺序测试",
+      "meter_mode": "DC voltage",
+      "meter_mode_zh": "DC V 直流电压档",
+      "test_points": [
+        "Black probe: X3_6-19 (-24V)",
+        "Measure in order: X3_1-2, X3_2-4, X3_9-29, X2-5"
+      ],
+      "normal_reading": "24V DC at each measured stop-circuit terminal.",
+      "normal_reading_zh": "每一个顺序量测点都应有 24V DC。",
+      "abnormal_meaning": "The first terminal without 24V is the interrupted part of the stop circuit.",
+      "abnormal_meaning_zh": "第一个没有 24V 的端子，就是 stop circuit 的中断方向。",
+      "steps_zh": [
+        "确认门体周围安全，避免门突然动作。",
+        "万用表设为 DC V 直流电压档。",
+        "黑表笔固定在 X3_6-19（-24V）。",
+        "按顺序量测 X3_1-2、X3_2-4、X3_9-29、X2-5。",
+        "顺序很重要；第一个没有 24V 的位置就是需要继续检查的中断点。",
+        "排除该中断点后，如果 stop circuit 仍中断，再继续量测下一个端子。"
+      ],
+      "safety_notes_zh": [
+        "带电量测只限合格技术人员操作。",
+        "不要用电表笔短接相邻端子。"
+      ],
+      "related_errors": [
+        "cnd1_stop_sign",
+        "cnd1_slack_wicket_switch"
+      ],
+      "source": {
+        "manual": "4230EN_Pro-Line-CND1_SW50.10_V1025.1_IND",
+        "pages": [
+          84,
+          85
+        ]
+      },
+      "steps_en": [
+        "Make sure the door area is safe and the door cannot move unexpectedly.",
+        "Set the multimeter to DC voltage.",
+        "Keep the black probe on X3_6-19 (-24V).",
+        "Measure X3_1-2, X3_2-4, X3_9-29, and X2-5 in that order.",
+        "The sequence is important. The first point without 24V is the interrupted section.",
+        "After fixing that section, continue with the next terminal if the stop circuit is still interrupted."
+      ],
+      "safety_notes_en": [
+        "Live electrical measurement must be performed only by qualified personnel.",
+        "Do not short adjacent terminals with the meter probes."
+      ]
+    },
+    {
+      "id": "cnd1_meter_x13_resistance_final_stop_check",
+      "category": "Stop circuit",
+      "title_en": "X13 final stop circuit resistance check",
+      "title_zh": "X13 最后段 stop circuit 电阻 / 蜂鸣测试",
+      "meter_mode": "Resistance / continuity",
+      "meter_mode_zh": "电阻档 / 蜂鸣导通档",
+      "test_points": [
+        "Move black probe to X13-5",
+        "Measure X13-1 and X13-5"
+      ],
+      "normal_reading": "0 ohm or audio continuity signal.",
+      "normal_reading_zh": "正常为 0 ohm 或蜂鸣导通。",
+      "abnormal_meaning": "OL means the final stop circuit path is interrupted.",
+      "abnormal_meaning_zh": "显示 OL 表示 X13 相关 stop circuit 路径中断。",
+      "steps_zh": [
+        "完成前面的 24V stop circuit 顺序测试后，再做此测试。",
+        "将黑表笔移到 X13-5。",
+        "万用表切换到电阻档或蜂鸣导通档。",
+        "量测 X13-1 与 X13-5。",
+        "若显示 OL，检查 X13 encoder / motor cable / safety sequence wiring。"
+      ],
+      "safety_notes_zh": [
+        "切换到电阻档前，应确认量测方式符合现场安全要求。",
+        "不要在不确定的带电回路上使用电阻档。"
+      ],
+      "related_errors": [
+        "cnd1_stop_sign",
+        "cnd1_e09_encoder_position_no_change"
+      ],
+      "source": {
+        "manual": "4230EN_Pro-Line-CND1_SW50.10_V1025.1_IND",
+        "page": 85
+      },
+      "steps_en": [
+        "Perform this test after the 24V stop-circuit sequence test.",
+        "Move the black probe to X13-5.",
+        "Set the multimeter to resistance or continuity mode.",
+        "Measure between X13-1 and X13-5.",
+        "If the meter shows OL, inspect the X13 encoder, motor cable, and safety sequence wiring."
+      ],
+      "safety_notes_en": [
+        "Confirm the circuit is safe before using resistance or continuity mode.",
+        "Do not use resistance mode on an unknown live circuit."
+      ]
+    },
+    {
+      "id": "cnd1_meter_encoder_12v_supply_x13",
+      "category": "Encoder",
+      "title_en": "Encoder 12V supply test at X13",
+      "title_zh": "X13 Encoder 12V 电源测试",
+      "meter_mode": "DC voltage",
+      "meter_mode_zh": "DC V 直流电压档",
+      "test_points": [
+        "X13-1: +12V",
+        "X13-2A: GND"
+      ],
+      "normal_reading": "Approximately 12V DC between X13-1 and X13-2A.",
+      "normal_reading_zh": "X13-1 与 X13-2A 之间应有约 12V DC。",
+      "abnormal_meaning": "No 12V can indicate encoder supply, wiring, or control-box supply fault.",
+      "abnormal_meaning_zh": "没有 12V 可能代表 encoder 电源、X13 接线或控制箱供应异常。",
+      "steps_zh": [
+        "检查 X13 接线：1 为 +12V，2A 为 GND。",
+        "万用表设为 DC V。",
+        "量测 X13-1 与 X13-2A 之间是否有约 12V DC。",
+        "若 D15 闪 1 次或 8 次，也应检查 X13 cabling 和 12V supply。",
+        "若 12V 正常但问题持续，检查 encoder / junction box / motor cable。"
+      ],
+      "safety_notes_zh": [
+        "表笔不要碰到 RS485 A/B 或相邻端子造成短路。"
+      ],
+      "related_errors": [
+        "cnd1_e09_encoder_position_no_change",
+        "cnd1_d15_flash_1",
+        "cnd1_d15_flash_8"
+      ],
+      "source": {
+        "manual": "4230EN_Pro-Line-CND1_SW50.10_V1025.1_IND",
+        "pages": [
+          22,
+          82
+        ]
+      },
+      "steps_en": [
+        "Check X13 wiring: terminal 1 is +12V and 2A is GND.",
+        "Set the multimeter to DC voltage.",
+        "Measure between X13-1 and X13-2A.",
+        "If D15 flashes 1x or 8x, also check X13 cabling and 12V supply.",
+        "If 12V is present but the fault remains, inspect the encoder, junction box, and motor cable."
+      ],
+      "safety_notes_en": [
+        "Live electrical measurement must be performed only by qualified personnel.",
+        "Do not short adjacent terminals with the meter probes."
+      ]
+    },
+    {
+      "id": "cnd1_meter_24v_external_supply_x3_6",
+      "category": "Power supply",
+      "title_en": "24V external device supply test at X3_6",
+      "title_zh": "X3_6 外部设备 24V 电源测试",
+      "meter_mode": "DC voltage",
+      "meter_mode_zh": "DC V 直流电压档",
+      "test_points": [
+        "X3_6-18: +24V",
+        "X3_6-19: -24V"
+      ],
+      "normal_reading": "24V DC supply, max 360mA external load.",
+      "normal_reading_zh": "应有 24V DC；外部负载最大 360mA。",
+      "abnormal_meaning": "Missing or low 24V can indicate overload, short circuit, or supply protection.",
+      "abnormal_meaning_zh": "没有 24V 或电压偏低，可能是外部回路过载、短路或保护动作。",
+      "steps_zh": [
+        "万用表设为 DC V。",
+        "量测 X3_6-18 与 X3_6-19。",
+        "若 24V 异常，先断开外部 24V 负载后再复测。",
+        "逐一接回 photo cell、light curtain 等外部设备，找出造成过载或短路的支路。",
+        "如显示 12/24V circuit malfunction，优先检查所有 12V/24V 外部连接。"
+      ],
+      "safety_notes_zh": [
+        "不要直接短接 X3_6-18 和 X3_6-19。",
+        "外部设备总负载不得超过 360mA。"
+      ],
+      "related_errors": [
+        "cnd1_24_12v_voltage_error",
+        "cnd1_photo_cell_1_interrupted",
+        "cnd1_photo_cell_2_interrupted",
+        "cnd1_photo_cell_error"
+      ],
+      "source": {
+        "manual": "4230EN_Pro-Line-CND1_SW50.10_V1025.1_IND",
+        "pages": [
+          18,
+          80,
+          88
+        ]
+      },
+      "steps_en": [
+        "Set the multimeter to DC voltage.",
+        "Measure between X3_6-18 and X3_6-19.",
+        "If 24V is abnormal, disconnect external 24V loads and test again.",
+        "Reconnect photo cells, light curtains, and other external devices one by one.",
+        "Identify the branch causing overload or short circuit."
+      ],
+      "safety_notes_en": [
+        "Live electrical measurement must be performed only by qualified personnel.",
+        "Do not short adjacent terminals with the meter probes."
+      ]
+    },
+    {
+      "id": "cnd1_meter_photocell_2_x3_6",
+      "category": "Photocell",
+      "title_en": "Photocell 2 supply and signal check at X3_6",
+      "title_zh": "X3_6 Photocell 2 电源与信号检查",
+      "meter_mode": "DC voltage",
+      "meter_mode_zh": "DC V 直流电压档",
+      "test_points": [
+        "X3_6-19: -24V",
+        "X3_6-20: +24V photocell transmitter",
+        "X3_6-21: +24V photocell receiver",
+        "X3_6-22: signal output"
+      ],
+      "normal_reading": "Photocell 2 uses X3_6 20-22 and is active as standard in parameter 31.",
+      "normal_reading_zh": "Photocell 2 接在 X3_6 20-22，并且 parameter 31 预设启用。",
+      "abnormal_meaning": "Incorrect voltage or signal can indicate blocked photocell, wiring fault, missing bridge, or wrong parameter 31 setting.",
+      "abnormal_meaning_zh": "电源或信号异常可能代表 photocell 被遮挡、接线错误、bridge 被移除或 parameter 31 设置不符。",
+      "steps_zh": [
+        "确认 photocell 2 是否真的安装在 X3_6 20-22。",
+        "若未安装 photocell，确认 X3_6 20-22 的 factory bridge 是否存在。",
+        "检查 X3_6-19 为 -24V，20/21 为 +24V photocell supply。",
+        "检查 22 signal output 是否随 photocell 遮挡/放开而变化。",
+        "确认 parameter 31 与实际 photocell 配置一致。"
+      ],
+      "safety_notes_zh": [
+        "测试 photocell 时不要站在门运行路径内。"
+      ],
+      "related_errors": [
+        "cnd1_photo_cell_2_interrupted",
+        "cnd1_photo_cell_error"
+      ],
+      "source": {
+        "manual": "4230EN_Pro-Line-CND1_SW50.10_V1025.1_IND",
+        "pages": [
+          19,
+          50,
+          77
+        ]
+      },
+      "steps_en": [
+        "Confirm photo cell 2 is installed at X3_6 20-22.",
+        "If no photo cell is installed, confirm the factory bridge at X3_6 20-22.",
+        "Check X3_6-19 as -24V and X3_6-20/21 as +24V photo cell supply.",
+        "Check whether terminal 22 signal output changes when the beam is blocked and released.",
+        "Confirm parameter 31 matches the installed photo cell configuration."
+      ],
+      "safety_notes_en": [
+        "Live electrical measurement must be performed only by qualified personnel.",
+        "Do not short adjacent terminals with the meter probes."
+      ]
+    },
+    {
+      "id": "cnd1_meter_photocell_1_x12",
+      "category": "Photocell",
+      "title_en": "Photocell 1 check at X12",
+      "title_zh": "X12 Photocell 1 检查",
+      "meter_mode": "DC voltage / signal check",
+      "meter_mode_zh": "DC V / 信号检查",
+      "test_points": [
+        "X12-1 to X12-3",
+        "Parameter 31 photocell 1 setting"
+      ],
+      "normal_reading": "Photocell 1 is connected at X12 1-3 and is deactivated as standard unless enabled in parameter 31.",
+      "normal_reading_zh": "Photocell 1 接在 X12 1-3；预设停用，需由 parameter 31 启用。",
+      "abnormal_meaning": "A photocell 1 display with parameter 31 disabled usually points to wiring/configuration mismatch.",
+      "abnormal_meaning_zh": "若 parameter 31 未启用却出现 photocell 1 相关显示，通常要检查接线或设定是否不一致。",
+      "steps_zh": [
+        "确认现场是否安装 photocell 1。",
+        "检查 photocell 1 是否接在 X12 1-3。",
+        "确认 parameter 31 是否启用 photocell 1。",
+        "若作为 retraction security 使用，确认只通过 X12 连接。",
+        "测试遮挡/放开 photocell 时显示是否同步变化。"
+      ],
+      "safety_notes_zh": [
+        "不要为了消除显示而长期旁路安全装置。"
+      ],
+      "related_errors": [
+        "cnd1_photo_cell_1_interrupted",
+        "cnd1_photo_cell_error"
+      ],
+      "source": {
+        "manual": "4230EN_Pro-Line-CND1_SW50.10_V1025.1_IND",
+        "pages": [
+          27,
+          50,
+          77
+        ]
+      },
+      "steps_en": [
+        "Confirm whether photo cell 1 is installed.",
+        "Check that photo cell 1 is wired to X12 1-3.",
+        "Confirm parameter 31 enables photo cell 1.",
+        "If used as retraction security, confirm it is connected through X12.",
+        "Block and release the beam and confirm the display changes correctly."
+      ],
+      "safety_notes_en": [
+        "Live electrical measurement must be performed only by qualified personnel.",
+        "Do not short adjacent terminals with the meter probes."
+      ]
+    },
+    {
+      "id": "cnd1_meter_safety_edge_x3_7_x3_8",
+      "category": "Safety edge",
+      "title_en": "Safety edge wiring check at X3_7 / X3_8",
+      "title_zh": "X3_7 / X3_8 Safety edge 接线检查",
+      "meter_mode": "Resistance / DC voltage",
+      "meter_mode_zh": "电阻档 / DC V，依 safety edge 类型选择",
+      "test_points": [
+        "X3_7: DW / 8.2k safety edge",
+        "X3_8: OPTO safety edge, 25 +12V, 26 Signal, 27 GND"
+      ],
+      "normal_reading": "Reading depends on parameter 21 and installed safety edge type.",
+      "normal_reading_zh": "正常读值取决于 parameter 21 与实际 safety edge 类型。",
+      "abnormal_meaning": "Mismatch between parameter 21 and wiring can trigger ERR or safety edge errors.",
+      "abnormal_meaning_zh": "parameter 21 与实际接线/类型不一致，会造成 ERR 或 safety edge 错误。",
+      "steps_zh": [
+        "先确认安装的是 DW、8.2k、OPTO、wireless 或 light curtain。",
+        "确认 parameter 21 选择与实际 safety edge 类型一致。",
+        "DW / 8.2k 类型检查 X3_7 接线。",
+        "OPTO 类型检查 X3_8：25 +12V、26 signal、27 GND。",
+        "若 parameter 21 选择 OPTO 或 light curtain，确认 X3_7 23-24 没有不该存在的连接。"
+      ],
+      "safety_notes_zh": [
+        "Safety edge 是安全装置，不可为了测试长期旁路。",
+        "改 parameter 21 后必须做完整功能测试。"
+      ],
+      "related_errors": [
+        "cnd1_safety_edge_not_fitted",
+        "cnd1_safety_contact_edge_error",
+        "cnd1_safety_edge_status"
+      ],
+      "source": {
+        "manual": "4230EN_Pro-Line-CND1_SW50.10_V1025.1_IND",
+        "pages": [
+          20,
+          44,
+          77,
+          79
+        ]
+      },
+      "steps_en": [
+        "Identify whether the installed device is DW, 8.2k, OPTO, wireless safety edge, or light curtain.",
+        "Confirm parameter 21 matches the installed safety edge type.",
+        "For DW or 8.2k, inspect X3_7 wiring.",
+        "For OPTO, inspect X3_8: 25 +12V, 26 signal, 27 GND.",
+        "If OPTO or light curtain is selected, confirm X3_7 23-24 has no incorrect connection."
+      ],
+      "safety_notes_en": [
+        "Confirm the circuit is safe before using resistance or continuity mode.",
+        "Do not use resistance mode on an unknown live circuit."
+      ]
+    },
+    {
+      "id": "cnd1_meter_x20_resistance_stop_circuit",
+      "category": "Stop circuit",
+      "title_en": "X20 stop circuit resistance analysis",
+      "title_zh": "X20 stop circuit 电阻分析",
+      "meter_mode": "Resistance",
+      "meter_mode_zh": "电阻档",
+      "test_points": [
+        "X20 stop circuit door leaf",
+        "Resistance system: 3k to 15k principle value"
+      ],
+      "normal_reading": "Control box can use any value between 3k and 15k as the principle value; common examples include 3k, 4.5k, 5k, 6k, 8k, 11.2k.",
+      "normal_reading_zh": "控制箱可用 3k 到 15k 作为基准值；常见组合为 3k、4.5k、5k、6k、8k、11.2k。",
+      "abnormal_meaning": "Lower than programmed value can indicate short circuit. No resistance can indicate short circuit in this resistance-analysis mode.",
+      "abnormal_meaning_zh": "量测值低于已学习/设定值可能代表短路；无电阻也可能被判定为短路。",
+      "steps_zh": [
+        "确认 stop circuit 使用的是 X20 idle current 还是 resistance analysis。",
+        "若使用 resistance analysis，确认 parameter 23:04。",
+        "检查 SCD1/SCD2/PD/permanent resistance 组合是否符合实际门叶设备。",
+        "如更改 X20 stop circuit，需重新学习/设定 resistance value。",
+        "若出现 SHOR 或 X20 short-circuiting，重点查找短路或错误电阻组合。"
+      ],
+      "safety_notes_zh": [
+        "不要随意改变 X20 安全回路电阻组合。",
+        "完成后必须测试 pass-door / slack cable device。"
+      ],
+      "related_errors": [
+        "cnd1_slack_wicket_switch",
+        "cnd1_second_safety_edge_wicket",
+        "cnd1_stop_sign"
+      ],
+      "source": {
+        "manual": "4230EN_Pro-Line-CND1_SW50.10_V1025.1_IND",
+        "pages": [
+          22,
+          23,
+          78
+        ]
+      },
+      "steps_en": [
+        "Confirm whether X20 uses idle-current analysis or resistance analysis.",
+        "If resistance analysis is used, confirm parameter 23:04.",
+        "Check whether the SCD, pass-door, and permanent resistance combination matches the actual door equipment.",
+        "If the X20 stop circuit was changed, reprogram the resistance value.",
+        "If SHOR or an X20 short-circuit error appears, inspect for short circuit or incorrect resistance combination."
+      ],
+      "safety_notes_en": [
+        "Confirm the circuit is safe before using resistance or continuity mode.",
+        "Do not use resistance mode on an unknown live circuit."
+      ]
+    }
+  ]
+}

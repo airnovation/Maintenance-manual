@@ -1,0 +1,1300 @@
+{
+  "metadata": {
+    "pack_id": "fermod-kit5010-fault-code-pack",
+    "version": "1.0.0",
+    "name": "Fermod Kit 5010 Fault Code Knowledge Pack v1.0",
+    "language": [
+      "zh-Hant",
+      "en"
+    ],
+    "status": "draft_for_app_mvp",
+    "created_date": "2026-07-04",
+    "source_documents": [
+      {
+        "title": "Kit5010ExpSécu_Elec-A Automatic Kit Manual",
+        "filename": "Kit_5010ExpSecu_Elec-A_SWE_160105_L (1).pdf",
+        "manual_ref": "NMkit5010ExpSécu_Elec-A",
+        "date": "01/2016",
+        "primary_sections": [
+          "Control keyboard using",
+          "Input/output display",
+          "Information codes",
+          "Malfunctioning",
+          "Wiring",
+          "Horizontal safety device",
+          "Initialization / First power on"
+        ],
+        "source_page_refs": {
+          "cover_index": 1,
+          "characteristics": 2,
+          "wiring_precautions": 3,
+          "motor_encoder_connection": 4,
+          "interface_wiring": 5,
+          "options_wiring": 6,
+          "horizontal_safety_device": [
+            7,
+            8
+          ],
+          "initialization": [
+            10,
+            11
+          ],
+          "control_keyboard": [
+            12,
+            13
+          ],
+          "input_output_display": 16,
+          "information_codes": [
+            17,
+            18
+          ],
+          "malfunctioning": 23
+        }
+      }
+    ],
+    "supported_systems": [
+      "Fermatic manual systems 2120 / 2130 / 2150",
+      "Fermatic manual systems 2320 / 2420",
+      "Fermatic manual systems 3430 / 3530 / 7530"
+    ],
+    "equipment_characteristics": {
+      "power_supply": "220-240V AC, 50/60 Hz, monophase",
+      "motor_power": "370W",
+      "command_box_protection": "IP65",
+      "motor_protection": "IP55",
+      "operating_temperature": "-30°C to +45°C, with low-temperature option requirement below -10°C"
+    },
+    "design_intent": "Offline-first door controller code assistant: decode display code, guide technician checks, record results, and sync when online.",
+    "safety_statement": "This knowledge pack is a diagnostic aid. Electrical work, motor disconnection, safety device testing, and live measurements must be performed only by qualified personnel following local regulations and company SOP."
+  },
+  "parser_spec": {
+    "normalization": {
+      "accepted_formats": [
+        "0002",
+        "00002",
+        "2",
+        "00307",
+        "307"
+      ],
+      "process": [
+        "Trim whitespace",
+        "Remove non-digit characters only if used as separators",
+        "Convert to integer",
+        "If integer is 0, return special code 0000",
+        "Otherwise decompose using known additive flags [256,32,16,8,4,2,1]",
+        "If any remainder remains, mark as unknown/unsupported code"
+      ]
+    },
+    "known_flags": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      32,
+      256
+    ],
+    "special_codes": [
+      0
+    ],
+    "max_supported_sum": 319,
+    "examples": [
+      {
+        "input": "0002",
+        "normalized_value": 2,
+        "decoded_flags": [
+          2
+        ]
+      },
+      {
+        "input": "0033",
+        "normalized_value": 33,
+        "decoded_flags": [
+          32,
+          1
+        ]
+      },
+      {
+        "input": "00307",
+        "normalized_value": 307,
+        "decoded_flags": [
+          256,
+          32,
+          16,
+          2,
+          1
+        ]
+      },
+      {
+        "input": "0319",
+        "normalized_value": 319,
+        "decoded_flags": [
+          256,
+          32,
+          16,
+          8,
+          4,
+          2,
+          1
+        ]
+      }
+    ],
+    "triage_order": [
+      16,
+      1,
+      32,
+      4,
+      256,
+      2,
+      8,
+      0
+    ],
+    "triage_rationale_zh": "消防、急停/鎖、安全裝置、馬達阻塞與位置丟失優先於一般摩擦或資訊狀態。"
+  },
+  "fault_codes": [
+    {
+      "code": 0,
+      "display_code": "0000",
+      "is_bit_flag": false,
+      "title_zh": "開門信號輸入啟動",
+      "title_en": "An opening command is active",
+      "manual_meaning_en": "An opening command is active",
+      "category": "control_input",
+      "priority": "info",
+      "risk_level": "low",
+      "summary_zh": "控制器偵測到一個開門輸入信號正在啟動。通常代表按鈕、拉繩、雷達、磁環或其他開門信號仍處於啟動狀態。",
+      "possible_causes": [
+        "開門按鈕卡住或接點保持閉合",
+        "拉繩、雷達、磁環或遙控輸入保持啟動",
+        "開門信號線路短路或接線錯誤",
+        "使用了保持型接點，而不是 manual 要求的 impulse 型開門信號"
+      ],
+      "required_tools": [
+        "control_keyboard",
+        "visual_inspection",
+        "multimeter"
+      ],
+      "guided_checks": [
+        {
+          "step": 1,
+          "instruction_zh": "確認門附近是否有人正在按住開門按鈕、拉繩或其他開門裝置。",
+          "input_type": "yes_no",
+          "instruction_en": "Check whether someone is holding the open button, pull cord, or another opening device."
+        },
+        {
+          "step": 2,
+          "instruction_zh": "檢查開門按鈕是否卡住，拉繩或雷達是否持續輸出信號。",
+          "input_type": "pass_fail",
+          "instruction_en": "Inspect whether the open button is stuck or the pull cord/radar is continuously sending an open signal."
+        },
+        {
+          "step": 3,
+          "instruction_zh": "進入 input/output display，檢查 opening input 狀態是否為 ON。",
+          "input_type": "on_off",
+          "instruction_en": "Enter the input/output display and check whether the opening input is ON."
+        },
+        {
+          "step": 4,
+          "instruction_zh": "若懷疑接線問題，由合資格人員使用萬用錶檢查開門輸入端子是否持續閉合。",
+          "input_type": "measurement",
+          "instruction_en": "If wiring is suspected, qualified personnel should use a multimeter to check whether the opening input terminal remains closed."
+        }
+      ],
+      "recommended_resolution": [
+        "解除卡住的開門裝置",
+        "修復或更換故障按鈕 / 拉繩 / 雷達",
+        "確認所有開門命令為 impulse model，避免保持閉合造成門一直保持開啟"
+      ],
+      "record_fields": [
+        "opening_device_checked",
+        "input_status",
+        "root_cause",
+        "action_taken",
+        "photo"
+      ],
+      "source_pages": [
+        5,
+        17
+      ]
+    },
+    {
+      "code": 1,
+      "display_code": "0001",
+      "is_bit_flag": true,
+      "title_zh": "急停 / 停止命令或鎖接點啟動",
+      "title_en": "Stop command active or lock active",
+      "manual_meaning_en": "A stop command is active or/and a lock is active",
+      "category": "control_input_lock",
+      "priority": "high",
+      "risk_level": "medium",
+      "summary_zh": "控制器偵測到 Stop command 1/2 或 Lock contact 處於啟動狀態，門可能被停止命令或鎖定條件禁止運行。",
+      "possible_causes": [
+        "Emergency stop / stop button 被按下",
+        "Stop 1/2 接線端子仍為開路或接點狀態不正確",
+        "Lock contact 啟動",
+        "鎖接線或停止迴路接線錯誤",
+        "相關 shunt 在未接設備時被移除"
+      ],
+      "required_tools": [
+        "control_keyboard",
+        "visual_inspection",
+        "multimeter"
+      ],
+      "guided_checks": [
+        {
+          "step": 1,
+          "instruction_zh": "確認所有急停 / stop button 是否被按下；若被按下，先確認安全再復位。",
+          "input_type": "yes_no",
+          "instruction_en": "Check whether a stop button, emergency stop, or lock input is active."
+        },
+        {
+          "step": 2,
+          "instruction_zh": "檢查 lock 是否處於鎖定狀態；確認門是否被機械鎖或電鎖阻止。",
+          "input_type": "yes_no",
+          "instruction_en": "Inspect the stop/lock wiring and connectors for loose or damaged connections."
+        },
+        {
+          "step": 3,
+          "instruction_zh": "查看 input/output display 的 B input，manual 將 B 對應 Fire detection / Stop command 1 or 2 / Lock contact。",
+          "input_type": "on_off",
+          "instruction_en": "Use the input/output display to identify which stop or lock input is ON."
+        },
+        {
+          "step": 4,
+          "instruction_zh": "由合資格人員檢查 Stop 1/2 端子 18-16、18-19 以及 lock wiring。",
+          "input_type": "pass_fail",
+          "instruction_en": "If the input remains active, isolate the related device or terminal according to company SOP."
+        },
+        {
+          "step": 5,
+          "instruction_zh": "若沒有接 stop 或 lock 裝置，確認對應 shunt 是否按照 wiring 要求保留。",
+          "input_type": "pass_fail",
+          "instruction_en": "After repair, confirm the stop and lock functions operate correctly before returning the door to service."
+        }
+      ],
+      "recommended_resolution": [
+        "復位急停 / stop button",
+        "解除或修復 lock contact 問題",
+        "修正 Stop 1/2 或 Lock 接線",
+        "恢復必要 shunt，或按規範接入安全接點"
+      ],
+      "record_fields": [
+        "stop_button_status",
+        "lock_status",
+        "input_b_status",
+        "terminal_check",
+        "root_cause",
+        "action_taken",
+        "photo"
+      ],
+      "source_pages": [
+        5,
+        6,
+        16,
+        17
+      ]
+    },
+    {
+      "code": 2,
+      "display_code": "0002",
+      "is_bit_flag": true,
+      "title_zh": "門偵測到阻力點 / 摩擦過大",
+      "title_en": "Door detects hard spot or excessive friction",
+      "manual_meaning_en": "The door detects hard spot or exceeding frictions",
+      "category": "mechanical_friction",
+      "priority": "medium",
+      "risk_level": "medium",
+      "summary_zh": "門在運行時偵測到異常阻力、卡點或摩擦過大。此代碼應優先做機械檢查，而不是直接調參或更換電氣部件。",
+      "possible_causes": [
+        "門軌、地面或門路徑有異物",
+        "滑輪、導軌、吊輪或底部導向件卡住",
+        "門封、gasket 或 passive edge mount 摩擦過大",
+        "門體偏斜、機械調整不良",
+        "皮帶張力不合適或跳齒",
+        "低溫結霜造成摩擦增加"
+      ],
+      "required_tools": [
+        "visual_inspection",
+        "manual_movement_test",
+        "camera",
+        "clamp_meter_optional"
+      ],
+      "guided_checks": [
+        {
+          "step": 1,
+          "instruction_zh": "停止門動作，確認人員不要站在門運行路徑中。",
+          "input_type": "acknowledge",
+          "instruction_en": "Inspect the door track and travel path for ice, debris, bent parts, or obstruction."
+        },
+        {
+          "step": 2,
+          "instruction_zh": "檢查門軌、地面、門框、門封位置是否有異物或結冰。",
+          "input_type": "pass_fail",
+          "instruction_en": "Move the door manually, if safe, and identify whether friction occurs at a fixed position."
+        },
+        {
+          "step": 3,
+          "instruction_zh": "斷開自動運行條件後，手動推門，記錄是否順暢、是否有固定卡點。",
+          "input_type": "select",
+          "options": [
+            "順暢",
+            "偏重",
+            "固定位置卡住",
+            "無法手動推動"
+          ],
+          "instruction_en": "Check gasket contact, belt condition, rollers, hinges, and door alignment."
+        },
+        {
+          "step": 4,
+          "instruction_zh": "檢查滑輪、導軌、belt guide、gasket、門封是否磨損、變形或卡住。",
+          "input_type": "pass_fail",
+          "instruction_en": "Confirm the door is not being forced against a mechanical end stop."
+        },
+        {
+          "step": 5,
+          "instruction_zh": "拍攝卡阻位置或異常摩擦位置。",
+          "input_type": "photo",
+          "instruction_en": "Measure motor current if excessive friction or overload is suspected."
+        },
+        {
+          "step": 6,
+          "instruction_zh": "清除異物或調整機械後，重新測試門開關。若仍異常，升級檢查 motor blocking / encoder / belt。",
+          "input_type": "result",
+          "instruction_en": "Correct the mechanical issue and test several full open/close cycles."
+        }
+      ],
+      "recommended_resolution": [
+        "清除障礙物或冰霜",
+        "調整門體、滑輪、導軌或門封",
+        "檢查並修正 belt tension / belt guide",
+        "必要時執行 initialization process"
+      ],
+      "record_fields": [
+        "manual_movement_result",
+        "jam_position",
+        "obstacle_found",
+        "mechanical_adjustment",
+        "photo_before",
+        "photo_after",
+        "result"
+      ],
+      "source_pages": [
+        17,
+        23
+      ]
+    },
+    {
+      "code": 4,
+      "display_code": "0004",
+      "is_bit_flag": true,
+      "title_zh": "馬達阻塞 / 門太重難以開啟",
+      "title_en": "Motor blocking / door too hard to open",
+      "manual_meaning_en": "The door detects motor blocking / door too hard to open",
+      "category": "motor_mechanical",
+      "priority": "high",
+      "risk_level": "high",
+      "summary_zh": "控制器偵測到馬達阻塞或門阻力過大到難以開啟。需先排除機械卡阻，再檢查 motor cable、encoder cable、電源與 motor 狀態。",
+      "possible_causes": [
+        "門被卡住或負載過重",
+        "門機械調整不良，手動也難以移動",
+        "motor cable 未插好或損壞",
+        "encoder cable 未插好或損壞",
+        "供電問題或 circuit breaker 問題",
+        "馬達或減速機故障"
+      ],
+      "required_tools": [
+        "manual_movement_test",
+        "visual_inspection",
+        "multimeter",
+        "clamp_meter",
+        "control_keyboard"
+      ],
+      "guided_checks": [
+        {
+          "step": 1,
+          "instruction_zh": "先確認門路徑安全，不要強行反覆啟動馬達。",
+          "input_type": "acknowledge",
+          "instruction_en": "Stop operation and confirm the door area is safe."
+        },
+        {
+          "step": 2,
+          "instruction_zh": "手動測試門是否可順暢移動；若很重或卡住，先處理機械問題。",
+          "input_type": "select",
+          "options": [
+            "順暢",
+            "偏重",
+            "卡住",
+            "不能移動"
+          ],
+          "instruction_en": "Check whether the door is blocked, frozen, mechanically jammed, or too heavy to move."
+        },
+        {
+          "step": 3,
+          "instruction_zh": "檢查 motor cable 與 encoder cable 是否正確插入 command box。",
+          "input_type": "pass_fail",
+          "instruction_en": "Inspect motor wiring, belt, transmission parts, and mechanical drive components."
+        },
+        {
+          "step": 4,
+          "instruction_zh": "由合資格人員檢查 power supply、circuit breaker 與供電端。",
+          "input_type": "pass_fail",
+          "instruction_en": "Manually move the door only if it is safe and permitted by SOP."
+        },
+        {
+          "step": 5,
+          "instruction_zh": "需要時用鉗形錶量 motor current，判斷是否過載或堵轉。",
+          "input_type": "measurement",
+          "instruction_en": "Use a clamp meter or multimeter as required to check for overload or electrical fault."
+        },
+        {
+          "step": 6,
+          "instruction_zh": "若要拔除 motor cable，必須先切斷 power supply。",
+          "input_type": "acknowledge",
+          "instruction_en": "Repair the mechanical or motor issue before resetting and testing the controller."
+        }
+      ],
+      "recommended_resolution": [
+        "排除門卡阻或過重問題",
+        "重新固定 motor / encoder connector",
+        "恢復正常供電與 circuit breaker 狀態",
+        "若馬達或減速機異常，交由合資格人員檢修或更換"
+      ],
+      "record_fields": [
+        "manual_movement_result",
+        "motor_cable_status",
+        "encoder_cable_status",
+        "power_supply_status",
+        "motor_current",
+        "root_cause",
+        "action_taken"
+      ],
+      "source_pages": [
+        4,
+        17,
+        23
+      ]
+    },
+    {
+      "code": 8,
+      "display_code": "0008",
+      "is_bit_flag": true,
+      "title_zh": "鎖啟動狀態下偵測到手動開門嘗試",
+      "title_en": "Manual opening attempt with lock active",
+      "manual_meaning_en": "The door detects manual opening attempt with LOCK = 1 or with an active lock",
+      "category": "lock_manual_attempt",
+      "priority": "medium",
+      "risk_level": "medium",
+      "summary_zh": "門在 LOCK=1 或鎖接點啟動時偵測到手動開門嘗試。需要先確認 lock 狀態、門是否被人為推動，以及鎖機構是否正常。",
+      "possible_causes": [
+        "有人在鎖定狀態下嘗試手動推門",
+        "Lock input 被啟動",
+        "鎖機構或鎖接點誤動作",
+        "LOCK parameter 設定不符合現場使用方式"
+      ],
+      "required_tools": [
+        "control_keyboard",
+        "visual_inspection",
+        "multimeter"
+      ],
+      "guided_checks": [
+        {
+          "step": 1,
+          "instruction_zh": "確認是否有人在門被鎖定時嘗試手動開門。",
+          "input_type": "yes_no",
+          "instruction_en": "Check whether someone attempted to open the door manually while the lock was active."
+        },
+        {
+          "step": 2,
+          "instruction_zh": "檢查 lock contact 是否仍啟動，必要時查看 LOCK 狀態。",
+          "input_type": "on_off",
+          "instruction_en": "Inspect the lock and manual release condition."
+        },
+        {
+          "step": 3,
+          "instruction_zh": "檢查鎖機構是否卡住、未完全釋放或接點異常。",
+          "input_type": "pass_fail",
+          "instruction_en": "Confirm the door is not mechanically forced against the lock."
+        },
+        {
+          "step": 4,
+          "instruction_zh": "確認 LOCK function 是否為現場需要的設定。",
+          "input_type": "pass_fail",
+          "instruction_en": "Reset according to the controller procedure only after confirming the lock and door are safe."
+        }
+      ],
+      "recommended_resolution": [
+        "解除鎖定狀態後再操作門",
+        "修復 lock contact 或鎖機構",
+        "重新檢查 LOCK parameter 與接線"
+      ],
+      "record_fields": [
+        "lock_status",
+        "manual_attempt_confirmed",
+        "lock_wiring_checked",
+        "root_cause",
+        "action_taken"
+      ],
+      "source_pages": [
+        17,
+        19
+      ]
+    },
+    {
+      "code": 16,
+      "display_code": "0016",
+      "is_bit_flag": true,
+      "title_zh": "Fire detection 輸入啟動",
+      "title_en": "Fire detection input active",
+      "manual_meaning_en": "Fire detection is active",
+      "category": "fire_input",
+      "priority": "critical",
+      "risk_level": "high",
+      "summary_zh": "控制器偵測到 Fire detection input 啟動。此類狀態應先確認是否為真實消防信號，不應直接旁路或清除。",
+      "possible_causes": [
+        "消防系統真實啟動",
+        "Fire detection 接點被觸發",
+        "Fire detection wiring 或 shunt 狀態異常",
+        "火警輸入接點故障"
+      ],
+      "required_tools": [
+        "control_keyboard",
+        "visual_inspection",
+        "multimeter"
+      ],
+      "guided_checks": [
+        {
+          "step": 1,
+          "instruction_zh": "先確認現場是否存在火警、煙霧或消防系統動作。若有，按照消防程序處理。",
+          "input_type": "yes_no",
+          "instruction_en": "Treat the fire input as high priority and check the site fire system status."
+        },
+        {
+          "step": 2,
+          "instruction_zh": "查看 input/output display 的 B input 狀態，B 對應 Fire detection / Stop command / Lock contact。",
+          "input_type": "on_off",
+          "instruction_en": "Confirm whether the fire alarm or fire input is actually active."
+        },
+        {
+          "step": 3,
+          "instruction_zh": "由合資格人員檢查 fire detection wiring，manual 標示此為 hold-on contact，安裝時需移除對應 shunt。",
+          "input_type": "pass_fail",
+          "instruction_en": "Inspect the fire input wiring and interface relay if the alarm is not active."
+        },
+        {
+          "step": 4,
+          "instruction_zh": "確認火警信號解除後再進行門系統測試。",
+          "input_type": "acknowledge",
+          "instruction_en": "Do not bypass the fire input unless authorized by site safety procedure."
+        }
+      ],
+      "recommended_resolution": [
+        "若為真實消防信號，按消防 / 建築安全程序處理",
+        "若為誤信號，檢查 fire detection 接點與接線",
+        "恢復正確 shunt / hold-on contact 配置"
+      ],
+      "record_fields": [
+        "fire_alarm_confirmed",
+        "input_b_status",
+        "fire_contact_status",
+        "root_cause",
+        "action_taken"
+      ],
+      "source_pages": [
+        6,
+        16,
+        17,
+        19
+      ]
+    },
+    {
+      "code": 32,
+      "display_code": "0032",
+      "is_bit_flag": true,
+      "title_zh": "安全裝置啟動、測試中或故障",
+      "title_en": "Safety device active, testing, or out of order",
+      "manual_meaning_en": "One safety device at least is active or testing in progress or out of order",
+      "category": "safety_device",
+      "priority": "high",
+      "risk_level": "high",
+      "summary_zh": "至少一個 safety device 啟動、測試中或故障。常見方向包括水平光電、vertical safety、edgemount、安全輸入接線或對位問題。",
+      "possible_causes": [
+        "Fotocell / horizontal safety device 被遮擋",
+        "光電反射器未對準",
+        "Safety sensor power supply 異常",
+        "安全輸入接線錯誤或 shunt 移除 / 保留不正確",
+        "Vertical safety 或 edgemount 故障",
+        "低溫或水氣造成 sensor 污染"
+      ],
+      "required_tools": [
+        "visual_inspection",
+        "control_keyboard",
+        "multimeter",
+        "camera"
+      ],
+      "guided_checks": [
+        {
+          "step": 1,
+          "instruction_zh": "檢查門口安全光線是否被人、貨物、冰霜或異物遮擋。",
+          "input_type": "yes_no",
+          "instruction_en": "Check whether any safety device is blocked, triggered, being tested, or out of order."
+        },
+        {
+          "step": 2,
+          "instruction_zh": "檢查 H1 sensor 的 GREEN POWER SUPPLY OK 與 ORANGE ALIGNMENT OK / SIGNAL OK 指示。",
+          "input_type": "select",
+          "options": [
+            "Green OK + Orange OK",
+            "Green OFF",
+            "Orange OFF",
+            "兩者異常",
+            "未安裝"
+          ],
+          "instruction_en": "Inspect photo cells, safety edge, light curtain, sensor alignment, and safety wiring."
+        },
+        {
+          "step": 3,
+          "instruction_zh": "檢查光電與反射器是否按照 opening side 對位，紅點/beam 是否在中心。",
+          "input_type": "pass_fail",
+          "instruction_en": "Use the input/output display to identify the active safety input."
+        },
+        {
+          "step": 4,
+          "instruction_zh": "查看 input/output display 的 optical safety / edgemount input 狀態。",
+          "input_type": "on_off",
+          "instruction_en": "Check sensor LEDs and wiring continuity according to the manual."
+        },
+        {
+          "step": 5,
+          "instruction_zh": "由合資格人員檢查 safety device wiring 與 remove shunt 是否符合安裝方式。",
+          "input_type": "pass_fail",
+          "instruction_en": "Do not permanently bypass the safety device."
+        },
+        {
+          "step": 6,
+          "instruction_zh": "若安全裝置故障超過 30 秒，manual 提到可用 press-and-hold command 關門；此操作只應作為受控應急動作，且不得永久旁路安全裝置。",
+          "input_type": "acknowledge",
+          "instruction_en": "After correction, test the safety function before returning the door to service."
+        }
+      ],
+      "recommended_resolution": [
+        "清除遮擋或冰霜",
+        "重新對準光電 sensor / reflector",
+        "修復 sensor 供電、接線或 safety input",
+        "檢查 vertical safety / edgemount 狀態",
+        "修復後測試安全功能"
+      ],
+      "record_fields": [
+        "safety_device_type",
+        "green_led_status",
+        "orange_led_status",
+        "alignment_checked",
+        "wiring_checked",
+        "photo",
+        "root_cause",
+        "action_taken"
+      ],
+      "source_pages": [
+        7,
+        8,
+        16,
+        17,
+        23
+      ]
+    },
+    {
+      "code": 256,
+      "display_code": "0256",
+      "is_bit_flag": true,
+      "title_zh": "門位置丟失",
+      "title_en": "Door position lost",
+      "manual_meaning_en": "Door position is lost after 5 attempts due to belt skipping, blocked door or internal malfunction of control unit",
+      "category": "position_encoder_belt",
+      "priority": "high",
+      "risk_level": "high",
+      "summary_zh": "控制器在多次嘗試後無法識別門位置。常見方向是皮帶跳齒、門被卡住、encoder 問題、或控制器內部異常。",
+      "possible_causes": [
+        "皮帶跳齒或張力不良",
+        "門被障礙物或機械問題卡住",
+        "Encoder cover 未裝好或損壞",
+        "Encoder connector 未插好",
+        "Encoder cable 被夾傷或損壞",
+        "控制器內部異常"
+      ],
+      "required_tools": [
+        "visual_inspection",
+        "manual_movement_test",
+        "control_keyboard",
+        "multimeter_optional",
+        "camera"
+      ],
+      "guided_checks": [
+        {
+          "step": 1,
+          "instruction_zh": "檢查門是否被卡住；手動推動確認是否能順暢移動。",
+          "input_type": "select",
+          "options": [
+            "順暢",
+            "偏重",
+            "卡住",
+            "不能移動"
+          ],
+          "instruction_en": "Check whether the controller lost the door position after power loss, belt movement, or encoder issue."
+        },
+        {
+          "step": 2,
+          "instruction_zh": "檢查 belt 是否鬆脫、跳齒、磨損或張力不足。",
+          "input_type": "pass_fail",
+          "instruction_en": "Inspect encoder, belt, motor connection, and position feedback wiring."
+        },
+        {
+          "step": 3,
+          "instruction_zh": "檢查 encoder cover 是否在 motor reducer 上，且沒有損壞。",
+          "input_type": "pass_fail",
+          "instruction_en": "Confirm the door can move safely in manual/deadman mode if required."
+        },
+        {
+          "step": 4,
+          "instruction_zh": "檢查 encoder connector 是否正確連接在 command box 下方。",
+          "input_type": "pass_fail",
+          "instruction_en": "Reprogram end positions according to the manual."
+        },
+        {
+          "step": 5,
+          "instruction_zh": "檢查 encoder cable 是否被夾傷、壓傷或損壞。",
+          "input_type": "pass_fail",
+          "instruction_en": "Run full open/close cycles and confirm the position display is stable."
+        },
+        {
+          "step": 6,
+          "instruction_zh": "清除機械問題後，必要時執行 initialization process。",
+          "input_type": "acknowledge",
+          "instruction_en": "If the fault repeats, inspect or replace the encoder/position feedback components."
+        }
+      ],
+      "recommended_resolution": [
+        "排除門卡住問題",
+        "重新調整或更換皮帶",
+        "修復 encoder cover / connector / cable",
+        "執行 initialization process",
+        "若仍反覆丟失位置，檢查控制器"
+      ],
+      "record_fields": [
+        "manual_movement_result",
+        "belt_status",
+        "encoder_cover_status",
+        "encoder_connector_status",
+        "encoder_cable_status",
+        "initialization_done",
+        "result"
+      ],
+      "source_pages": [
+        4,
+        17,
+        23
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "id": "control_keyboard",
+      "name_zh": "控制鍵盤 / Display Unit",
+      "purpose_zh": "讀取 OK、moving door、open door、timer countdown、information codes、C1-C8、input/output display。",
+      "safety_zh": "不要直接按壓 display 面板；按鍵操作需根據 manual 順序。",
+      "data_to_record": [
+        "display_code",
+        "door_status",
+        "C8_value",
+        "input_output_status"
+      ],
+      "name_en": "Control keyboard / display unit",
+      "purpose_en": "Read OK, moving door, open door, timer countdown, information codes, C1-C8, and input/output display.",
+      "safety_en": "Do not press directly on the display panel. Follow the manual sequence for key operation."
+    },
+    {
+      "id": "visual_inspection",
+      "name_zh": "視覺檢查",
+      "purpose_zh": "檢查門軌、門路徑、門封、gasket、belt、sensor alignment、connector、接線、指示燈狀態。",
+      "safety_zh": "檢查時避免站在門運行範圍內；涉及控制箱內部需合資格人員。",
+      "data_to_record": [
+        "obstacle_found",
+        "belt_status",
+        "sensor_led_status",
+        "photo"
+      ],
+      "name_en": "Visual inspection",
+      "purpose_en": "Check tracks, door path, gasket, belt, sensor alignment, connectors, wiring, and indicator LEDs.",
+      "safety_en": "Stay out of the door travel path. Internal control-box inspection must be done by qualified personnel."
+    },
+    {
+      "id": "manual_movement_test",
+      "name_zh": "手動推門測試",
+      "purpose_zh": "判斷門是否順暢、偏重、固定位置卡住、或完全不能移動。",
+      "safety_zh": "測試前確認門不會自動啟動；必要時隔離自動運行條件。",
+      "data_to_record": [
+        "movement_result",
+        "jam_position",
+        "abnormal_noise",
+        "friction_location"
+      ],
+      "name_en": "Manual door movement test",
+      "purpose_en": "Check whether the door moves smoothly, is heavy, jams at a fixed position, or cannot move.",
+      "safety_en": "Confirm the door cannot start automatically before testing. Isolate automatic operation if needed."
+    },
+    {
+      "id": "multimeter",
+      "name_zh": "萬用錶",
+      "purpose_zh": "檢查電源、24Vcc 供電、stop/lock/fire/safety/opening input 狀態與接點是否短路。",
+      "safety_zh": "帶電測量只限合資格人員；確認檔位與測點；不得隨意旁路 safety input。",
+      "data_to_record": [
+        "voltage",
+        "continuity",
+        "terminal_pair",
+        "result"
+      ],
+      "name_en": "Multimeter",
+      "purpose_en": "Check power supply, 24V DC, stop/lock/fire/safety/opening inputs, and possible short circuits.",
+      "safety_en": "Live measurements must be performed only by qualified personnel. Confirm range and test points before measuring."
+    },
+    {
+      "id": "clamp_meter",
+      "name_zh": "鉗形電流錶",
+      "purpose_zh": "檢查 motor current 是否異常，輔助判斷 motor blocking、過載或機械阻力過高。",
+      "safety_zh": "帶電測量只限合資格人員，保持安全距離。",
+      "data_to_record": [
+        "motor_current",
+        "running_state",
+        "comparison_to_expected"
+      ],
+      "name_en": "Clamp meter",
+      "purpose_en": "Check motor current to help identify blocking, overload, or excessive mechanical friction.",
+      "safety_en": "Live current measurement must be done only by qualified personnel while keeping a safe distance."
+    },
+    {
+      "id": "camera",
+      "name_zh": "手機相機",
+      "purpose_zh": "拍攝 display code、sensor LED、接線端子、卡阻位置、維修前後狀態。",
+      "safety_zh": "拍照時不要進入門運行路徑；不要為拍照而打開帶電控制箱。",
+      "data_to_record": [
+        "photo_before",
+        "photo_after",
+        "display_photo",
+        "wiring_photo"
+      ],
+      "name_en": "Phone camera",
+      "purpose_en": "Take photos of display codes, sensor LEDs, terminals, jammed positions, and before/after repair condition.",
+      "safety_en": "Do not enter the door travel path for a photo. Do not open a live control box just to take a photo."
+    }
+  ],
+  "safety_notes": [
+    {
+      "id": "qualified_personnel",
+      "title_zh": "合資格人員限制",
+      "content_zh": "電氣接線、控制箱內測量、馬達/encoder 接頭檢查、帶電測量及安全裝置迴路檢查，應由合資格技術人員根據當地法規與公司 SOP 執行。",
+      "source_pages": [
+        2,
+        3,
+        4
+      ],
+      "title_en": "Qualified personnel only",
+      "content_en": "Electrical wiring, internal control-box measurements, motor/encoder connector checks, live measurements, and safety circuit checks must be performed by qualified technicians following local regulations and company SOP."
+    },
+    {
+      "id": "cut_power_before_motor_disconnect",
+      "title_zh": "拔除馬達前必須切斷電源",
+      "content_zh": "manual 明確要求：disconnecting motor 前必須先切斷 power supply。",
+      "source_pages": [
+        4
+      ],
+      "title_en": "Disconnect power before unplugging the motor",
+      "content_en": "The manual requires the power supply to be disconnected before disconnecting the motor."
+    },
+    {
+      "id": "do_not_bypass_safety",
+      "title_zh": "不得永久旁路安全裝置",
+      "content_zh": "安全裝置 active/testing/fault 時，應檢查 sensor、alignment、wiring 與 shunt；不得為恢復運行而永久旁路 safety device。",
+      "source_pages": [
+        7,
+        8,
+        17,
+        23
+      ],
+      "title_en": "Do not permanently bypass safety devices",
+      "content_en": "When a safety device is active, being tested, or faulty, inspect the sensor, alignment, wiring, and shunt. Do not permanently bypass safety devices to restore operation."
+    },
+    {
+      "id": "dedicated_power_line",
+      "title_zh": "供電與保護",
+      "content_zh": "manual 指出供電為 220-240V AC 50/60Hz，連接電纜 3G2.5mm²，且每個 kit 應連接到 dedicated power line，並由 D curve circuit breaker 保護。",
+      "source_pages": [
+        3,
+        6
+      ],
+      "title_en": "Power supply and protection",
+      "content_en": "The manual specifies 220-240V AC 50/60Hz, 3G2.5mm2 cable, a dedicated power line for each kit, and D-curve circuit breaker protection."
+    },
+    {
+      "id": "low_temperature_command_box",
+      "title_zh": "低溫環境注意",
+      "content_zh": "環境溫度低於 -10°C 時，需要 low temperature command box；不應使用標準控制箱替代。",
+      "source_pages": [
+        3
+      ],
+      "title_en": "Low-temperature installation",
+      "content_en": "When ambient temperature is below -10C, a low-temperature command box is required. Do not substitute a standard control box."
+    },
+    {
+      "id": "lock_not_mechanical_replacement",
+      "title_zh": "內建鎖不等於機械鎖",
+      "content_zh": "manual 說明 integrated lock does not replace the use of a mechanical lock。",
+      "source_pages": [
+        2
+      ],
+      "title_en": "Integrated lock is not a mechanical lock replacement",
+      "content_en": "The manual states that the integrated lock does not replace a mechanical lock."
+    }
+  ],
+  "input_output_map": {
+    "inputs": [
+      {
+        "id": "1",
+        "designation_zh": "Impulse coder",
+        "designation_en": "Impulse coder",
+        "diagnostic_use": "Position / encoder related diagnosis"
+      },
+      {
+        "id": "2",
+        "designation_zh": "Direction coder",
+        "designation_en": "Direction coder",
+        "diagnostic_use": "Direction / encoder related diagnosis"
+      },
+      {
+        "id": "3",
+        "designation_zh": "Optical horizontal safety device",
+        "designation_en": "Optical safety device",
+        "diagnostic_use": "Safety device code 0032"
+      },
+      {
+        "id": "4",
+        "designation_zh": "低溫 current injection",
+        "designation_en": "Current injection for minus temperature",
+        "diagnostic_use": "Low-temperature option status"
+      },
+      {
+        "id": "B",
+        "designation_zh": "Fire detection / Stop command 1 or 2 / Lock contact",
+        "designation_en": "Fire detection / Stop command 1 or 2 / Lock contact",
+        "diagnostic_use": "Codes 0001 and 0016"
+      },
+      {
+        "id": "C",
+        "designation_zh": "Opening command 1 or 2 active",
+        "designation_en": "Pull cord opening command 1 or 2",
+        "diagnostic_use": "Code 0000"
+      },
+      {
+        "id": "D",
+        "designation_zh": "Partial/total opening command active",
+        "designation_en": "Partial/total opening command 1/2",
+        "diagnostic_use": "Code 0000"
+      },
+      {
+        "id": "E",
+        "designation_zh": "Active edgemount / closing side",
+        "designation_en": "Active edgemount/closing side",
+        "diagnostic_use": "Safety or closing-side diagnosis"
+      }
+    ],
+    "outputs": [
+      {
+        "id": "1",
+        "designation_zh": "Motor working command and flashing lights",
+        "designation_en": "Motor working command and flashing lights"
+      },
+      {
+        "id": "2",
+        "designation_zh": "Motor side command",
+        "designation_en": "Motor side command"
+      },
+      {
+        "id": "3",
+        "designation_zh": "Motor couple command",
+        "designation_en": "Motor couple command"
+      },
+      {
+        "id": "4",
+        "designation_zh": "Motor speed command",
+        "designation_en": "Motor speed command"
+      }
+    ],
+    "display_convention": {
+      "empty_background": "OFF",
+      "black_background": "ON"
+    },
+    "source_pages": [
+      16
+    ]
+  },
+  "initialization_guide": {
+    "id": "initialization_process",
+    "title_zh": "初始化 / 重新學習流程",
+    "use_when": [
+      "開關方向反轉",
+      "門位置丟失後排除障礙",
+      "門被卡住多次後需要重置",
+      "清除機械障礙或調整 belt 後需要重新學習位置"
+    ],
+    "steps": [
+      "等待 initialization 完成或確認目前狀態可操作。",
+      "檢查 C8 = 00000；若需要重新學習，將 parameter C8 設為 0。",
+      "手動關門。",
+      "同時按住控制鍵盤 4 個按鈕約 3 秒，然後放開；應出現 initialization display。",
+      "發出 full opening command，例如 push-button / badge 等。",
+      "等待門重新設定開關方向與位置。",
+      "門停止在 closed position 並顯示 OK，表示完成。"
+    ],
+    "preconditions": [
+      "安全裝置已接好或正確 shunt",
+      "門可以手動順暢移動",
+      "butts / end stops 已安裝",
+      "第一次 opening command 前應手動關門，以避免開門方向學習錯誤",
+      "belt tension 足夠"
+    ],
+    "source_pages": [
+      10,
+      11,
+      23
+    ]
+  },
+  "malfunctioning_guides": [
+    {
+      "symptom_id": "door_not_close_completely",
+      "symptom_zh": "門不能完全關閉",
+      "likely_causes_zh": [
+        "belt guide 缺失或損壞",
+        "門路徑有障礙物"
+      ],
+      "checks_zh": [
+        "檢查 belt guide",
+        "清除門路徑障礙物",
+        "清除後執行 initialization process"
+      ],
+      "source_pages": [
+        23
+      ]
+    },
+    {
+      "symptom_id": "door_closes_slowly",
+      "symptom_zh": "門關閉速度慢",
+      "likely_causes_zh": [
+        "vertical security 故障",
+        "摩擦過大",
+        "正常現象：關門速度低於開門速度"
+      ],
+      "checks_zh": [
+        "檢查 vertical security",
+        "檢查門摩擦與卡阻",
+        "確認是否只是正常關門速度設定"
+      ],
+      "source_pages": [
+        23
+      ]
+    },
+    {
+      "symptom_id": "door_does_not_move",
+      "symptom_zh": "門不動",
+      "likely_causes_zh": [
+        "motor cable 或 encoder cable 未插入 command box",
+        "power supply 問題",
+        "stop buttons 狀態不正確"
+      ],
+      "checks_zh": [
+        "檢查 motor cable 與 encoder cable",
+        "檢查 power supply",
+        "檢查 stop buttons"
+      ],
+      "source_pages": [
+        4,
+        23
+      ]
+    },
+    {
+      "symptom_id": "door_jammed_opening",
+      "symptom_zh": "開門時卡住",
+      "likely_causes_zh": [
+        "門路徑障礙物",
+        "摩擦過大",
+        "位置需要重新學習"
+      ],
+      "checks_zh": [
+        "門停止時發出 opening command 嘗試打開",
+        "5 次失敗後系統會開始 initialization cycle reset",
+        "清除任何障礙物"
+      ],
+      "source_pages": [
+        23
+      ]
+    },
+    {
+      "symptom_id": "door_jammed_closing",
+      "symptom_zh": "關門時卡住",
+      "likely_causes_zh": [
+        "門路徑障礙物",
+        "關閉側 safety / edgemount 狀態",
+        "摩擦過大"
+      ],
+      "checks_zh": [
+        "5 次自動關閉失敗後門會停止",
+        "清除障礙物",
+        "發出 opening command 讓系統開始 initialization cycle reset"
+      ],
+      "source_pages": [
+        23
+      ]
+    },
+    {
+      "symptom_id": "opening_closing_reversal",
+      "symptom_zh": "門開關方向反轉",
+      "likely_causes_zh": [
+        "初始化方向學習錯誤",
+        "首次上電前門未手動關閉"
+      ],
+      "checks_zh": [
+        "將 C8 設為 0",
+        "手動關門",
+        "按住 4 個按鈕 3 秒",
+        "發出 opening command",
+        "等待 OK"
+      ],
+      "source_pages": [
+        10,
+        11,
+        23
+      ]
+    },
+    {
+      "symptom_id": "horizontal_security_failure",
+      "symptom_zh": "Horizontal safety failure",
+      "likely_causes_zh": [
+        "光電 cell 故障超過 30 秒",
+        "sensor 對位或供電異常"
+      ],
+      "checks_zh": [
+        "檢查 sensor power OK / alignment OK",
+        "確認沒有遮擋",
+        "按 manual，只有 press-and-hold commands 允許在此情況下受控關門"
+      ],
+      "source_pages": [
+        7,
+        8,
+        23
+      ]
+    },
+    {
+      "symptom_id": "c7_inactive",
+      "symptom_zh": "C7 關門速度設定無效",
+      "likely_causes_zh": [
+        "vertical security 未連接",
+        "passive edgemount 或 positive vertical security 故障"
+      ],
+      "checks_zh": [
+        "確認是否有 vertical security option",
+        "若 passive edgemount 或 vertical security 故障，C7 不能調整，關門速度會設為最低"
+      ],
+      "source_pages": [
+        23
+      ]
+    },
+    {
+      "symptom_id": "door_opens_50cm_stops_door_closed_display",
+      "symptom_zh": "門打開約 50 cm 後停止，控制鍵盤顯示 door closed",
+      "likely_causes_zh": [
+        "Encoder failure"
+      ],
+      "checks_zh": [
+        "檢查 encoder cover 是否在 motoreducer 上",
+        "檢查 encoder cover 是否損壞",
+        "檢查 encoder connector 是否連接在 command box 下方",
+        "檢查 encoder cable 是否被夾傷或損壞"
+      ],
+      "source_pages": [
+        4,
+        23
+      ]
+    },
+    {
+      "symptom_id": "keyboard_not_switch_on",
+      "symptom_zh": "控制鍵盤不亮",
+      "likely_causes_zh": [
+        "power supply 問題",
+        "command box 內 circuit breaker 位置",
+        "interface card 1/2 端子 24Vcc 有短路或負載超過 100mA"
+      ],
+      "checks_zh": [
+        "檢查 power supply",
+        "檢查 circuit breaker",
+        "檢查 terminals 1 and 2 連接設備是否短路或耗電超過 100mA"
+      ],
+      "source_pages": [
+        23
+      ]
+    }
+  ],
+  "case_schema": {
+    "case_id": "string",
+    "created_at": "datetime",
+    "technician": "string",
+    "site": "string",
+    "door_system": {
+      "brand": "Fermod",
+      "kit": "Kit 5000 / 5010",
+      "manual_ref": "NMkit5010ExpSécu_Elec-A",
+      "door_location": "string"
+    },
+    "input": {
+      "display_code_raw": "string",
+      "display_code_value": "integer",
+      "decoded_flags": [
+        "integer"
+      ],
+      "symptom_selected": "string|null"
+    },
+    "checks": [
+      {
+        "step_id": "string",
+        "question": "string",
+        "answer": "string|number|boolean",
+        "tool_used": "string",
+        "photo_refs": [
+          "string"
+        ],
+        "notes": "string"
+      }
+    ],
+    "diagnosis": {
+      "primary_direction": "string",
+      "supporting_evidence": [
+        "string"
+      ],
+      "still_need_to_verify": [
+        "string"
+      ],
+      "safety_flags": [
+        "string"
+      ]
+    },
+    "resolution": {
+      "root_cause": "string",
+      "action_taken": "string",
+      "parts_replaced": [
+        "string"
+      ],
+      "result": "resolved|partially_resolved|not_resolved|needs_escalation",
+      "follow_up_required": "boolean"
+    },
+    "sync": {
+      "offline_created": "boolean",
+      "synced": "boolean",
+      "synced_at": "datetime|null"
+    }
+  }
+}

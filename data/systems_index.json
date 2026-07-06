@@ -1,0 +1,47 @@
+{
+  "version": "1.0.0",
+  "door_types": [
+    {
+      "id": "cold_room_sliding_door",
+      "name_en": "Cold room sliding door",
+      "name_zh": "冷库滑门",
+      "brands": [
+        {
+          "id": "fermod",
+          "name_en": "Fermod",
+          "name_zh": "Fermod",
+          "controllers": [
+            {
+              "id": "fermod_kit_5010",
+              "name_en": "Kit 5000 / 5010 Controller",
+              "name_zh": "Kit 5000 / 5010 控制箱",
+              "pack": "/data/knowledge_pack.json",
+              "diagnostic_modes": ["numeric_code"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sectional_door",
+      "name_en": "Sectional door",
+      "name_zh": "分段门",
+      "brands": [
+        {
+          "id": "pro_line",
+          "name_en": "Pro-Line / CND1",
+          "name_zh": "Pro-Line / CND1",
+          "controllers": [
+            {
+              "id": "cnd1",
+              "name_en": "CND1 Control Box",
+              "name_zh": "CND1 控制箱",
+              "pack": "/data/cnd1_sectional_door_knowledge_pack_v1_0.json",
+              "diagnostic_modes": ["symbol_gallery", "keyword", "d15_flash", "procedure"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1893 @@
+{
+  "pack_id": "cnd1_sectional_door_knowledge_pack",
+  "version": "1.0",
+  "product_name": "CND1 Sectional Door Knowledge Pack",
+  "system": {
+    "equipment_type": "Sectional Door",
+    "brand": "Pro-Line / CND1",
+    "models": [
+      "Pro-Line 28",
+      "Pro-Line 50",
+      "Pro-Line 70",
+      "CND1 Control Box"
+    ],
+    "manual_sources": [
+      {
+        "manual_id": "EN_4231r3-CND1-Quick-start-guide",
+        "title": "CND1 - Quick start",
+        "version": "1025",
+        "file": "EN_4231r3-CND1-Quick-start-guide.pdf"
+      },
+      {
+        "manual_id": "CND1-Error-codes-english",
+        "title": "CND1 - Error codes",
+        "version": "0220 EN",
+        "file": "CND1-Error-codes-english.pdf"
+      }
+    ]
+  },
+  "app_positioning": {
+    "recommended_app_name": "Door Display Helper",
+    "description": "Offline-first helper for CND1 display symbols, D15 LED flash errors, wiring/procedure issues, and recommended checks. No login, no recording, no backend required for v1.",
+    "input_methods": [
+      "select_display_symbol",
+      "keyword_search",
+      "d15_led_flash_count",
+      "procedure_lookup"
+    ]
+  },
+  "tools": [
+    {
+      "tool_id": "visual_inspection",
+      "name_en": "Visual inspection",
+      "name_zh": "目視檢查",
+      "purpose_zh": "檢查顯示符號、接線、插頭、bridge、門體狀態、safety device 和 junction box。",
+      "safety_note_zh": "確認門不會突然運行，避免站在門運行路徑內。",
+      "purpose_en": "Inspect display symbols, wiring, connectors, bridges, door condition, safety devices, and junction boxes.",
+      "safety_note_en": "Make sure the door cannot move unexpectedly and stay out of the door travel path."
+    },
+    {
+      "tool_id": "multimeter",
+      "name_en": "Multimeter",
+      "name_zh": "萬用錶",
+      "purpose_zh": "檢查 24 VDC / 12 VDC、terminal、connector、stop chain、encoder supply 等。",
+      "safety_note_zh": "帶電測量只限合資格技術人員。",
+      "purpose_en": "Check 24V DC, 12V DC, terminals, connectors, stop circuit, and encoder supply.",
+      "safety_note_en": "Live measurements must be performed only by qualified personnel."
+    },
+    {
+      "tool_id": "dil_switch_check",
+      "name_en": "DIL switch check",
+      "name_zh": "DIL 開關檢查",
+      "purpose_zh": "確認 switch 1 programming mode、switch 4 factory reset 或其他設定位置。",
+      "safety_note_zh": "更改 DIL switch 前確認流程與設備狀態。",
+      "purpose_en": "Check switch 1 programming mode, switch 4 factory reset, and other DIL switch positions.",
+      "safety_note_en": "Confirm the procedure and equipment status before changing any DIL switch."
+    },
+    {
+      "tool_id": "control_box_display",
+      "name_en": "Control box display",
+      "name_zh": "控制箱顯示器",
+      "purpose_zh": "查看 display symbol、programming display、E-code、FAC、SER 等。",
+      "safety_note_zh": "不要只根據單一顯示判斷，需依 manual 流程檢查。",
+      "purpose_en": "Read display symbols, programming display, E-codes, FAC, SER, and other status messages.",
+      "safety_note_en": "Do not rely on one display only. Follow the manual checks."
+    },
+    {
+      "tool_id": "manual_door_movement",
+      "name_en": "Manual door movement",
+      "name_zh": "手動移動門",
+      "purpose_zh": "用於 serious fault / SER 或 encoder position 無變化時，將門移離 end position 或移至中間位置。",
+      "safety_note_zh": "手動移門前確認門平衡、安全、無人處於門下方或運行路徑。",
+      "purpose_en": "Move the door away from end positions or to a middle position when SER or encoder-position errors require it.",
+      "safety_note_en": "Before manual movement, confirm the door is balanced, safe, and no one is under or inside the travel path."
+    },
+    {
+      "tool_id": "slotted_screwdriver",
+      "name_en": "Slotted screwdriver",
+      "name_zh": "一字螺絲刀",
+      "purpose_zh": "用於 quick start 中調整 CEE plug phase reversal 或指定端子操作。",
+      "safety_note_zh": "相序調整與電氣操作只限合資格人員。",
+      "purpose_en": "Used for CEE plug phase reversal or specified terminal operations in the quick-start procedure.",
+      "safety_note_en": "Phase reversal and electrical work must be performed only by qualified personnel."
+    }
+  ],
+  "display_symbols": [
+    {
+      "id": "cnd1_stop_sign",
+      "type": "display_symbol",
+      "title_en": "ERROR: Stop sign",
+      "title_zh": "停止符號 / Stop sign",
+      "aliases": [
+        "stop",
+        "stop sign",
+        "stop chain",
+        "停止",
+        "停止符號",
+        "stop circuit"
+      ],
+      "meaning_en": "Stop chain / stop circuit related error.",
+      "meaning_zh": "停止迴路、安全停止或 drive stop 相關錯誤。",
+      "recommended_checks_zh": [
+        "檢查 end positions 是否已正確設定；若未設定，先重新設定 door end positions。",
+        "檢查 green spiral cable connector；必要時在 yellow / black 所在位置放 temporary bridge 作隔離測試，找到問題後移除 bridge。",
+        "檢查 X3.1 1-2（red connector）與 X3.2 3-4 的 bridges/connectors 是否正確並接觸良好。",
+        "檢查 X3.9 28-29 與 X2 4-5 safety jumper plug。",
+        "檢查 drive emergency stop：KE chain、KU crank 或 E disconnection 狀態。",
+        "必要時在 X13 2-5 放 temporary bridge；若錯誤消失，問題方向在 drive 或 motor cable。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter",
+        "control_box_display"
+      ],
+      "priority": "high",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "pages": [
+          2,
+          3
+        ]
+      },
+      "display_image": "/symbols/cnd1/cnd1_stop_sign.png",
+      "recommended_checks_en": [
+        "Check whether end positions are correctly programmed.",
+        "Inspect the green spiral-cable connector and the yellow/black stop-circuit wires.",
+        "Check bridges/connectors at X3_1 1-2, X3_2 3-4, X3_9 28-29, X2 4-5, and X13 2-5.",
+        "Use the stop-circuit 24V sequence meter test to locate the first interrupted terminal.",
+        "If a temporary bridge is used for isolation testing, remove it after identifying the fault."
+      ]
+    },
+    {
+      "id": "cnd1_slack_wicket_switch",
+      "type": "display_symbol",
+      "title_en": "ERROR: Slack-cable switch / Wicket-door switch",
+      "title_zh": "鬆纜開關 / 小門開關錯誤",
+      "aliases": [
+        "slack",
+        "slack cable",
+        "wicket",
+        "wicket door",
+        "passdoor",
+        "鬆纜",
+        "小門"
+      ],
+      "meaning_en": "Circuit for slack-cable switch and/or wicket-door switch is interrupted.",
+      "meaning_zh": "鬆纜開關和/或小門開關迴路中斷。",
+      "recommended_checks_zh": [
+        "檢查 spiral cable 的 green connector X20 是否位置正確。",
+        "確認 yellow cable 在上方 position 4，black cable 在下方 position 3。",
+        "檢查門板上的 junction boxes。",
+        "移除 slack-cable switch 與 wicket-door switch 的 cables，並用 supplied red jumper plugs 替換進行隔離測試。",
+        "若錯誤仍不消失，先更換 spiral cable，再檢查 / 更換 door seal 內的 6-pole connection cable。",
+        "逐一重新連接 slack-cable switch 與 wicket-door switch cable，直到找到故障點。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter"
+      ],
+      "priority": "high",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 4
+      },
+      "display_image": "/symbols/cnd1/cnd1_slack_wicket_switch.png",
+      "recommended_checks_en": [
+        "Check the green connector X20 on the spiral cable.",
+        "Confirm the yellow cable is at position 4 and the black cable is at position 3.",
+        "Inspect door-leaf junction boxes, slack-cable switch, and wicket-door/pass-door switch.",
+        "Use supplied jumper plugs only for isolation testing, then restore the safety circuit.",
+        "If the error remains, inspect the spiral cable and door-seal connection cable."
+      ]
+    },
+    {
+      "id": "cnd1_nothing_active",
+      "type": "display_symbol",
+      "title_en": "Nothing active / 4-chairs symbol",
+      "title_zh": "無動作 / 4-chair symbol",
+      "aliases": [
+        "nothing active",
+        "4 chairs",
+        "idle",
+        "無動作"
+      ],
+      "meaning_en": "Nothing active / 4-chairs symbol",
+      "meaning_zh": "門停在兩個終點位置之間，未發現錯誤。",
+      "recommended_checks_zh": [
+        "這是 info message，不一定是故障。"
+      ],
+      "tools": [
+        "control_box_display"
+      ],
+      "priority": "info",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 6
+      },
+      "display_image": "/symbols/cnd1/cnd1_nothing_active.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: Nothing active / 4-chairs symbol.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ]
+    },
+    {
+      "id": "cnd1_end_position_open",
+      "type": "display_symbol",
+      "title_en": "End position OPEN reached",
+      "title_zh": "已到達開門終點",
+      "aliases": [
+        "open reached",
+        "door open",
+        "open position",
+        "開門終點"
+      ],
+      "meaning_en": "End position OPEN reached",
+      "meaning_zh": "門已到達開門終點位置。",
+      "recommended_checks_zh": [
+        "這是 info message，不一定是故障。",
+        "若位置不正確，重新設定 open/closed end positions。"
+      ],
+      "tools": [
+        "control_box_display"
+      ],
+      "priority": "info",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 6
+      },
+      "display_image": "/symbols/cnd1/cnd1_end_position_open.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: End position OPEN reached.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ]
+    },
+    {
+      "id": "cnd1_end_position_closed",
+      "type": "display_symbol",
+      "title_en": "End position CLOSED reached",
+      "title_zh": "已到達關門終點",
+      "aliases": [
+        "closed reached",
+        "door closed",
+        "closed position",
+        "關門終點"
+      ],
+      "meaning_en": "End position CLOSED reached",
+      "meaning_zh": "門已到達關門終點位置。",
+      "recommended_checks_zh": [
+        "這是 info message，不一定是故障。",
+        "若位置不正確，重新設定 open/closed end positions。"
+      ],
+      "tools": [
+        "control_box_display"
+      ],
+      "priority": "info",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 6
+      },
+      "display_image": "/symbols/cnd1/cnd1_end_position_closed.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: End position CLOSED reached.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ]
+    },
+    {
+      "id": "cnd1_end_position_half_open",
+      "type": "display_symbol",
+      "title_en": "End position 1/2 OPEN reached",
+      "title_zh": "已到達半開位置",
+      "aliases": [
+        "half open",
+        "1/2 open",
+        "partial open",
+        "半開"
+      ],
+      "meaning_en": "End position 1/2 OPEN reached",
+      "meaning_zh": "門已到達半開位置。",
+      "recommended_checks_zh": [
+        "這是 info message，不一定是故障。"
+      ],
+      "tools": [
+        "control_box_display"
+      ],
+      "priority": "info",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 6
+      },
+      "display_image": "/symbols/cnd1/cnd1_end_position_half_open.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: End position 1/2 OPEN reached.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ]
+    },
+    {
+      "id": "cnd1_external_open_active",
+      "type": "display_symbol",
+      "title_en": "External pushbutton OPEN active",
+      "title_zh": "外部開門按鈕啟動",
+      "aliases": [
+        "external open",
+        "open button",
+        "loop detector",
+        "外部開門"
+      ],
+      "meaning_en": "External pushbutton OPEN active",
+      "meaning_zh": "X3.2 5-6 外部開門按鈕啟動；loop detector 啟動也可能顯示此符號。",
+      "recommended_checks_zh": [
+        "檢查 external OPEN pushbutton 是否卡住。",
+        "檢查 loop detector 是否正在啟動。",
+        "檢查 X3.2 5-6 端子。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 6
+      },
+      "display_image": "/symbols/cnd1/cnd1_external_open_active.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: External pushbutton OPEN active.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ]
+    },
+    {
+      "id": "cnd1_external_closed_active",
+      "type": "display_symbol",
+      "title_en": "External pushbutton CLOSED active",
+      "title_zh": "外部關門按鈕啟動",
+      "aliases": [
+        "external closed",
+        "closed button",
+        "close button",
+        "外部關門"
+      ],
+      "meaning_en": "External pushbutton CLOSED active",
+      "meaning_zh": "X3.2 7-8 外部關門按鈕啟動。",
+      "recommended_checks_zh": [
+        "檢查 external CLOSED pushbutton 是否卡住。",
+        "檢查 X3.2 7-8 端子。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 6
+      },
+      "display_image": "/symbols/cnd1/cnd1_external_closed_active.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: External pushbutton CLOSED active.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ]
+    },
+    {
+      "id": "cnd1_ga_impulse_active",
+      "type": "display_symbol",
+      "title_en": "GA impulse function active",
+      "title_zh": "GA impulse function 啟動",
+      "aliases": [
+        "GA",
+        "GA impulse",
+        "impulse"
+      ],
+      "meaning_en": "GA impulse function active",
+      "meaning_zh": "GA impulse function 啟動；若要用 GA function 關門，需要 safety contact edge + photo cell 或 X3.6 20-22 bridge。",
+      "recommended_checks_zh": [
+        "確認 X3.6 20-22 是否有 safety contact edge + photo cell 或 bridge。",
+        "檢查 safety input 是否符合設定。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 6
+      },
+      "display_image": "/symbols/cnd1/cnd1_ga_impulse_active.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: GA impulse function active.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ]
+    },
+    {
+      "id": "cnd1_photo_cell_1_interrupted",
+      "type": "display_symbol",
+      "title_en": "Photo cell 1 interrupted",
+      "title_zh": "Photo cell 1 被遮斷",
+      "aliases": [
+        "photo cell 1",
+        "photocell 1",
+        "cell 1",
+        "光電 1"
+      ],
+      "meaning_en": "Photo cell 1 interrupted",
+      "meaning_zh": "外部 photo cell 1 被遮斷；接在 X12。Photo cell 1 預設停用，需查看 parameter 31。",
+      "recommended_checks_zh": [
+        "檢查 photo cell 1 是否被遮擋。",
+        "檢查 X12 接線。",
+        "確認 parameter 31 設定。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 6
+      },
+      "display_image": "/symbols/cnd1/cnd1_photo_cell_1_interrupted.png",
+      "recommended_checks_en": [
+        "Check whether photo cell 1 is blocked or misaligned.",
+        "Inspect terminal X12 1-3.",
+        "Confirm parameter 31 enables photo cell 1 when it is installed.",
+        "Test whether the display changes when the beam is blocked and released."
+      ]
+    },
+    {
+      "id": "cnd1_photo_cell_2_interrupted",
+      "type": "display_symbol",
+      "title_en": "Photo cell 2 interrupted",
+      "title_zh": "Photo cell 2 被遮斷",
+      "aliases": [
+        "photo cell 2",
+        "photocell 2",
+        "cell 2",
+        "光電 2"
+      ],
+      "meaning_en": "Photo cell 2 interrupted",
+      "meaning_zh": "外部 photo cell 2 被遮斷；接在 X3。",
+      "recommended_checks_zh": [
+        "檢查 photo cell 2 是否被遮擋。",
+        "檢查 X3 接線。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 6
+      },
+      "display_image": "/symbols/cnd1/cnd1_photo_cell_2_interrupted.png",
+      "recommended_checks_en": [
+        "Check whether photo cell 2 is blocked or misaligned.",
+        "Inspect terminal X3_6 20-22.",
+        "Confirm the factory bridge is present if no photo cell is installed.",
+        "Confirm parameter 31 matches the installed photo cell configuration."
+      ]
+    },
+    {
+      "id": "cnd1_safety_edge_status",
+      "type": "display_symbol",
+      "title_en": "Safety contact edge status",
+      "title_zh": "Safety contact edge 狀態",
+      "aliases": [
+        "safety edge status",
+        "safety contact edge",
+        "dead-man",
+        "safety edge interrupted"
+      ],
+      "meaning_en": "Safety contact edge related operating display.",
+      "meaning_zh": "Safety contact edge 相關運行顯示，可能代表 dead-man operation、safety contact edge interrupted 或 defective。",
+      "recommended_checks_zh": [
+        "確認是否為 dead-man operation。",
+        "檢查 safety contact edge 是否被觸發或損壞。",
+        "如顯示持續存在，檢查 safety contact edge 接線與參數設定。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter",
+        "control_box_display"
+      ],
+      "priority": "medium",
+      "display_image": "/symbols/cnd1/cnd1_safety_edge_status.png",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 6
+      },
+      "recommended_checks_en": [
+        "Confirm whether the display is caused by deadman operation.",
+        "Check whether the safety edge is activated, damaged, or not connected.",
+        "Verify parameter 21 matches the installed safety edge type.",
+        "Inspect X3_7 or X3_8 wiring according to the safety edge type."
+      ]
+    }
+  ],
+  "error_messages": [
+    {
+      "id": "cnd1_safety_edge_not_fitted",
+      "type": "error_message",
+      "title_en": "Safety contact edge not fitted correctly / incorrect parameter 21",
+      "title_zh": "Safety contact edge 未正確安裝 / parameter 21 選擇錯誤",
+      "aliases": [
+        "safety edge not fitted",
+        "parameter 21",
+        "edge parameter"
+      ],
+      "meaning_zh": "Safety contact edge 安裝錯誤，或 parameter 21 選擇不正確。",
+      "recommended_checks_zh": [
+        "檢查 safety contact edge 接線。",
+        "檢查 parameter 21 設定是否符合 door hardware。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter",
+        "control_box_display"
+      ],
+      "priority": "high",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 7
+      },
+      "display_image": "/symbols/cnd1/cnd1_safety_edge_not_fitted.png",
+      "recommended_checks_en": [
+        "Check safety edge wiring.",
+        "Confirm parameter 21 matches the installed safety edge type.",
+        "If OPTO or light curtain is selected, confirm X3_7 23-24 has no incorrect connection.",
+        "Run a full safety edge function test after correction."
+      ],
+      "meaning_en": "Safety contact edge not fitted correctly / incorrect parameter 21"
+    },
+    {
+      "id": "cnd1_ser_door_runs_without_command",
+      "type": "error_message",
+      "title_en": "Error code: Door runs without command / SER",
+      "title_zh": "SER：門在無指令時運行",
+      "aliases": [
+        "SER",
+        "runs without command",
+        "motor runs unintentionally"
+      ],
+      "meaning_zh": "嚴重故障：門在沒有命令時運行，可能需要維護或 circuit board 檢查。",
+      "recommended_checks_zh": [
+        "這是 serious fault，先確保現場安全。",
+        "手動將門移離 moving end positions，或在無電狀態下將門移至中間位置。",
+        "將 DIL switch no.1 從 normal mode 切換到 programming mode 以清除 SER。",
+        "若通電後 1 秒內門再次無指令運行，circuit board 可能 defective。"
+      ],
+      "tools": [
+        "manual_door_movement",
+        "dil_switch_check",
+        "control_box_display"
+      ],
+      "priority": "critical",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 7
+      },
+      "display_image": "/symbols/cnd1/cnd1_ser_door_runs_without_command.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: Error code: Door runs without command / SER.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ],
+      "meaning_en": "Error code: Door runs without command / SER"
+    },
+    {
+      "id": "cnd1_dw_self_test",
+      "type": "error_message",
+      "title_en": "Error code self-test DW",
+      "title_zh": "DW 自檢錯誤",
+      "aliases": [
+        "DW self test",
+        "self-test DW"
+      ],
+      "meaning_zh": "DW 門第一次 cycle 時會出現；第一次 cycle 和成功 self-test 後應消失。",
+      "recommended_checks_zh": [
+        "若未消失，重新設定 door end position。",
+        "若門沒有 DW，檢查 parameter 21。"
+      ],
+      "tools": [
+        "control_box_display"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 7
+      },
+      "display_image": "/symbols/cnd1/cnd1_dw_self_test.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: Error code self-test DW.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ],
+      "meaning_en": "Error code self-test DW"
+    },
+    {
+      "id": "cnd1_power_limit",
+      "type": "error_message",
+      "title_en": "Error code: Power limit",
+      "title_zh": "Power limit 錯誤",
+      "aliases": [
+        "power limit",
+        "parameter 44"
+      ],
+      "meaning_zh": "若 power limit 功能啟動，門會被 power limit 停止；或返回 run mode 時 automatic power limit 未設定。",
+      "recommended_checks_zh": [
+        "設定 power control。",
+        "調整 parameter 44 sensitivity。"
+      ],
+      "tools": [
+        "control_box_display"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 7
+      },
+      "display_image": "/symbols/cnd1/cnd1_power_limit.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: Error code: Power limit.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ],
+      "meaning_en": "Error code: Power limit"
+    },
+    {
+      "id": "cnd1_run_time",
+      "type": "error_message",
+      "title_en": "Error code: Run time",
+      "title_zh": "Run time 錯誤",
+      "aliases": [
+        "run time",
+        "parameter 51"
+      ],
+      "meaning_zh": "門在 run time setting 期間停止。",
+      "recommended_checks_zh": [
+        "查看 parameter 51。",
+        "檢查門是否機械卡阻或運行時間設定不合理。"
+      ],
+      "tools": [
+        "control_box_display",
+        "visual_inspection"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 7
+      },
+      "display_image": "/symbols/cnd1/cnd1_run_time.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: Error code: Run time.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ],
+      "meaning_en": "Error code: Run time"
+    },
+    {
+      "id": "cnd1_maintenance_counter",
+      "type": "error_message",
+      "title_en": "Error code: Maintenance",
+      "title_zh": "Maintenance 保養提示",
+      "aliases": [
+        "maintenance",
+        "counter"
+      ],
+      "meaning_zh": "Operating hours counter 減至 0，需要 reset 才能重新倒數。",
+      "recommended_checks_zh": [
+        "完成必要保養後 reset counter。"
+      ],
+      "tools": [
+        "control_box_display"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 7
+      },
+      "display_image": "/symbols/cnd1/cnd1_maintenance_counter.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: Error code: Maintenance.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ],
+      "meaning_en": "Error code: Maintenance"
+    },
+    {
+      "id": "cnd1_photo_cell_error",
+      "type": "error_message",
+      "title_en": "Error code: Photo cell",
+      "title_zh": "Photo cell 錯誤",
+      "aliases": [
+        "photo cell error",
+        "photocell error"
+      ],
+      "meaning_zh": "Photo-cell circuit 錯誤；最後停止後 test cycle failed。",
+      "recommended_checks_zh": [
+        "檢查 photo-cell circuit。",
+        "按 stop 開始新的 test。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter",
+        "control_box_display"
+      ],
+      "priority": "high",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 7
+      },
+      "display_image": "/symbols/cnd1/cnd1_photo_cell_error.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: Error code: Photo cell.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ],
+      "meaning_en": "Error code: Photo cell"
+    },
+    {
+      "id": "cnd1_safety_contact_edge_error",
+      "type": "error_message",
+      "title_en": "Error code: Safety contact edge",
+      "title_zh": "Safety contact edge 錯誤",
+      "aliases": [
+        "safety edge",
+        "contact edge"
+      ],
+      "meaning_zh": "Safety contact edge circuit 錯誤；最後停止後 test cycle failed。",
+      "recommended_checks_zh": [
+        "檢查 safety contact edge circuit。",
+        "按 stop 開始新的 test。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter",
+        "control_box_display"
+      ],
+      "priority": "high",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 7
+      },
+      "display_image": "/symbols/cnd1/cnd1_safety_contact_edge_error.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: Error code: Safety contact edge.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ],
+      "meaning_en": "Error code: Safety contact edge"
+    },
+    {
+      "id": "cnd1_speed_monitoring",
+      "type": "error_message",
+      "title_en": "Error code: Speed monitoring",
+      "title_zh": "Speed monitoring 錯誤",
+      "aliases": [
+        "speed monitoring",
+        "speed too low"
+      ],
+      "meaning_zh": "速度太低。",
+      "recommended_checks_zh": [
+        "檢查門的機械狀態是否良好。",
+        "Reset power limit。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "manual_door_movement",
+        "control_box_display"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 7
+      },
+      "display_image": "/symbols/cnd1/cnd1_speed_monitoring.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: Error code: Speed monitoring.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ],
+      "meaning_en": "Error code: Speed monitoring"
+    },
+    {
+      "id": "cnd1_e09_encoder_position_no_change",
+      "type": "error_message",
+      "title_en": "E:09 - No change in encoder position during operation",
+      "title_zh": "E:09 - 運行時 encoder position 沒有變化",
+      "aliases": [
+        "E09",
+        "E:09",
+        "encoder no change",
+        "position no change"
+      ],
+      "meaning_zh": "門已啟動，但 position 沒有變化；延遲後門停止並短暫顯示 E:09。",
+      "recommended_checks_zh": [
+        "檢查門是否被卡住。",
+        "檢查 drive 是否 disconnected。",
+        "檢查 cable connection error。",
+        "Reset E09：需要以 dead-man operation impulse 方式重新找到兩個 end positions。",
+        "若無法找到兩個 end positions，重新設定 end positions。",
+        "必要時調整 parameter 81 delay time。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "manual_door_movement",
+        "multimeter",
+        "control_box_display"
+      ],
+      "priority": "high",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 8
+      },
+      "display_image": "/symbols/cnd1/cnd1_e09_encoder_position_no_change.png",
+      "recommended_checks_en": [
+        "Check whether the door is blocked, disconnected, or mechanically jammed.",
+        "Inspect encoder cabling at X13 and the door-leaf junction box.",
+        "Check 12V encoder supply at X13.",
+        "Move the door to both end positions in deadman mode or reprogram end positions to reset the error.",
+        "If the error repeats, inspect the encoder and motor cable."
+      ],
+      "meaning_en": "E:09 - No change in encoder position during operation"
+    },
+    {
+      "id": "cnd1_second_safety_edge_wicket",
+      "type": "error_message",
+      "title_en": "Second safety contact edge or wicket (X20 3-4)",
+      "title_zh": "第二 safety contact edge 或 wicket（X20 3-4）",
+      "aliases": [
+        "X20 3-4",
+        "second safety edge",
+        "wicket X20"
+      ],
+      "meaning_zh": "Safety contact edge circuit 錯誤；最後停止後 test cycle failed。",
+      "recommended_checks_zh": [
+        "檢查 X20 3-4。",
+        "檢查 wicket 或第二 safety contact edge circuit。",
+        "按 stop 開始新的 test。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter"
+      ],
+      "priority": "high",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 8
+      },
+      "display_image": "/symbols/cnd1/cnd1_second_safety_edge_wicket.png",
+      "recommended_checks_en": [
+        "Press STOP to start a new test after the previous stop-circuit self-test failed.",
+        "Check stop circuit X20 3-4.",
+        "Inspect wicket/pass-door and safety contact edge wiring.",
+        "Use the stop-circuit meter tests to locate the interruption."
+      ],
+      "meaning_en": "Second safety contact edge or wicket (X20 3-4)"
+    },
+    {
+      "id": "cnd1_eeprom_e20",
+      "type": "error_message",
+      "title_en": "EEPROM error - possible end position change after power limit set",
+      "title_zh": "EEPROM 錯誤 - power limit 設定後 end position 可能改變",
+      "aliases": [
+        "E20",
+        "EEPROM",
+        "parameter 41"
+      ],
+      "meaning_zh": "可能是 power limit 設定後 end positions 改變。",
+      "recommended_checks_zh": [
+        "嘗試在 parameter 41 關閉 power control（41:00），然後重新啟動。"
+      ],
+      "tools": [
+        "control_box_display"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 8
+      },
+      "display_image": "/symbols/cnd1/cnd1_eeprom_e20.png",
+      "recommended_checks_en": [
+        "Check whether end positions were changed after force limitation monitoring was programmed.",
+        "Switch off force limitation monitoring in parameter 41 if required by the manual.",
+        "Restart the control box by disconnecting it from mains power.",
+        "Reprogram end positions if needed."
+      ],
+      "meaning_en": "EEPROM error - possible end position change after power limit set"
+    },
+    {
+      "id": "cnd1_eeprom_startup",
+      "type": "error_message",
+      "title_en": "EEPROM error during start up",
+      "title_zh": "啟動時 EEPROM 錯誤",
+      "aliases": [
+        "EEPROM startup",
+        "factory settings",
+        "processor"
+      ],
+      "meaning_zh": "啟動時 EEPROM 錯誤。",
+      "recommended_checks_zh": [
+        "恢復 factory settings。",
+        "若仍無法解決，可能需要更換 processor。"
+      ],
+      "tools": [
+        "control_box_display",
+        "dil_switch_check"
+      ],
+      "priority": "high",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 8
+      },
+      "display_image": "/symbols/cnd1/cnd1_eeprom_startup.png",
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: EEPROM error during start up.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ],
+      "meaning_en": "EEPROM error during start up"
+    },
+    {
+      "id": "cnd1_24_12v_voltage_error",
+      "type": "error_message",
+      "title_en": "Error in 24V and/or 12V voltage circuit",
+      "title_zh": "24V / 12V 電壓迴路錯誤",
+      "aliases": [
+        "24V",
+        "12V",
+        "shorted",
+        "overloaded"
+      ],
+      "meaning_zh": "24V / 12V 迴路短路或過載。",
+      "recommended_checks_zh": [
+        "檢查 24V / 12V circuit 是否短路。",
+        "檢查是否有過載。",
+        "使用萬用錶量測相關供電。"
+      ],
+      "tools": [
+        "multimeter",
+        "visual_inspection"
+      ],
+      "priority": "high",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 8
+      },
+      "display_image": "/symbols/cnd1/cnd1_24_12v_voltage_error.png",
+      "recommended_checks_en": [
+        "Check 12V and 24V power circuits for short circuit or overload.",
+        "Disconnect external 24V loads and retest the supply.",
+        "Check X3_6 18-19 24V supply and X13 encoder 12V supply.",
+        "Reconnect external devices one by one to locate the overloaded branch."
+      ],
+      "meaning_en": "Error in 24V and/or 12V voltage circuit"
+    },
+    {
+      "id": "cnd1_door_runs_up",
+      "type": "error_message",
+      "title_en": "Door runs up",
+      "title_zh": "門向上運行",
+      "aliases": [
+        "door runs up",
+        "runs up"
+      ],
+      "meaning_zh": "顯示門向上運行狀態。",
+      "recommended_checks_zh": [
+        "若非預期動作，先停止操作並檢查控制輸入與安全迴路。"
+      ],
+      "tools": [
+        "control_box_display",
+        "visual_inspection"
+      ],
+      "priority": "medium",
+      "display_image": "/symbols/cnd1/cnd1_door_runs_up.png",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 7
+      },
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: Door runs up.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ],
+      "meaning_en": "Door runs up"
+    },
+    {
+      "id": "cnd1_door_runs_down",
+      "type": "error_message",
+      "title_en": "Door runs down",
+      "title_zh": "門向下運行",
+      "aliases": [
+        "door runs down",
+        "runs down"
+      ],
+      "meaning_zh": "顯示門向下運行狀態。",
+      "recommended_checks_zh": [
+        "若非預期動作，先停止操作並檢查控制輸入與安全迴路。"
+      ],
+      "tools": [
+        "control_box_display",
+        "visual_inspection"
+      ],
+      "priority": "medium",
+      "display_image": "/symbols/cnd1/cnd1_door_runs_down.png",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 7
+      },
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: Door runs down.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ],
+      "meaning_en": "Door runs down"
+    },
+    {
+      "id": "cnd1_e07_not_applicable",
+      "type": "error_message",
+      "title_en": "E07 - Not applicable",
+      "title_zh": "E07 - 不適用",
+      "aliases": [
+        "E07",
+        "not applicable"
+      ],
+      "meaning_zh": "Manual 標示為 Not applicable。",
+      "recommended_checks_zh": [
+        "此項 manual 標示為不適用；如控制箱仍顯示，請記錄顯示並升級檢查。"
+      ],
+      "tools": [
+        "control_box_display"
+      ],
+      "priority": "info",
+      "display_image": "/symbols/cnd1/cnd1_e07_not_applicable.png",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 7
+      },
+      "recommended_checks_en": [
+        "Confirm the display or symptom matches: E07 - Not applicable.",
+        "Inspect the related wiring, terminal, parameter, and connected device.",
+        "Use the related meter test when voltage, resistance, or continuity must be confirmed.",
+        "After correction, run a functional test before returning the door to service."
+      ],
+      "meaning_en": "E07 - Not applicable"
+    }
+  ],
+  "d15_led_errors": [
+    {
+      "id": "cnd1_d15_flash_1",
+      "type": "d15_led_flash",
+      "flash_count": 1,
+      "title_en": "No answer from encoder / no 24 VDC control voltage",
+      "title_zh": "Encoder 無回應 / 無 24 VDC 控制電壓",
+      "recommended_checks_zh": [
+        "檢查 encoder connections。",
+        "檢查 X3 18-19 terminal 的 24 VDC voltage。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter"
+      ],
+      "priority": "high",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 5
+      },
+      "recommended_checks_en": [
+        "Check wiring in the door-leaf junction box.",
+        "Check X13 cabling according to the manual.",
+        "Check 12V supply at X13 1-2."
+      ],
+      "meaning_en": "No answer from encoder / no 24 VDC control voltage"
+    },
+    {
+      "id": "cnd1_d15_flash_2",
+      "type": "d15_led_flash",
+      "flash_count": 2,
+      "title_en": "End positions not set",
+      "title_zh": "End positions 未設定",
+      "recommended_checks_zh": [
+        "設定 open/closed end positions。"
+      ],
+      "tools": [
+        "control_box_display",
+        "dil_switch_check"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 5
+      },
+      "recommended_checks_en": [
+        "Use the D15 flash count to confirm: End positions not set.",
+        "Check the related wiring, parameter, or component listed in the manual.",
+        "Restart or reprogram only after the physical cause is corrected."
+      ],
+      "meaning_en": "End positions not set"
+    },
+    {
+      "id": "cnd1_d15_flash_3",
+      "type": "d15_led_flash",
+      "flash_count": 3,
+      "title_en": "Motor runs unintentionally",
+      "title_zh": "Motor 無指令運行",
+      "recommended_checks_zh": [
+        "Maintenance required，serious fault。",
+        "手動將門移離 moving end positions，或斷電時手動移至中間位置。",
+        "將 DIL switch no.1 從 normal mode 切換到 programming mode 以清除 SER。",
+        "若通電後 1 秒內仍無指令運行，circuit board defective。"
+      ],
+      "tools": [
+        "manual_door_movement",
+        "dil_switch_check"
+      ],
+      "priority": "critical",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 5
+      },
+      "recommended_checks_en": [
+        "Use the D15 flash count to confirm: Motor runs unintentionally.",
+        "Check the related wiring, parameter, or component listed in the manual.",
+        "Restart or reprogram only after the physical cause is corrected."
+      ],
+      "meaning_en": "Motor runs unintentionally"
+    },
+    {
+      "id": "cnd1_d15_flash_4",
+      "type": "d15_led_flash",
+      "flash_count": 4,
+      "title_en": "Calculation error",
+      "title_zh": "Calculation error",
+      "recommended_checks_zh": [
+        "檢查 parameter 11 是否選擇正確（left/right turning）。",
+        "檢查是否兩個 end positions 相同。",
+        "檢查 encoder error。"
+      ],
+      "tools": [
+        "control_box_display"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 5
+      },
+      "recommended_checks_en": [
+        "Use the D15 flash count to confirm: Calculation error.",
+        "Check the related wiring, parameter, or component listed in the manual.",
+        "Restart or reprogram only after the physical cause is corrected."
+      ],
+      "meaning_en": "Calculation error"
+    },
+    {
+      "id": "cnd1_d15_flash_5",
+      "type": "d15_led_flash",
+      "flash_count": 5,
+      "title_en": "Not in use",
+      "title_zh": "未使用",
+      "recommended_checks_zh": [
+        "此閃爍次數未使用。"
+      ],
+      "tools": [],
+      "priority": "info",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 5
+      },
+      "recommended_checks_en": [
+        "Use the D15 flash count to confirm: Not in use.",
+        "Check the related wiring, parameter, or component listed in the manual.",
+        "Restart or reprogram only after the physical cause is corrected."
+      ],
+      "meaning_en": "Not in use"
+    },
+    {
+      "id": "cnd1_d15_flash_6",
+      "type": "d15_led_flash",
+      "flash_count": 6,
+      "title_en": "Not in use",
+      "title_zh": "未使用",
+      "recommended_checks_zh": [
+        "此閃爍次數未使用。"
+      ],
+      "tools": [],
+      "priority": "info",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 5
+      },
+      "recommended_checks_en": [
+        "Use the D15 flash count to confirm: Not in use.",
+        "Check the related wiring, parameter, or component listed in the manual.",
+        "Restart or reprogram only after the physical cause is corrected."
+      ],
+      "meaning_en": "Not in use"
+    },
+    {
+      "id": "cnd1_d15_flash_7",
+      "type": "d15_led_flash",
+      "flash_count": 7,
+      "title_en": "Encoder - incorrect selection of left/right turning",
+      "title_zh": "Encoder 左/右轉選擇錯誤",
+      "recommended_checks_zh": [
+        "檢查 parameter 11 是否選擇正確（left/right turning）。",
+        "或重新設定 end positions。"
+      ],
+      "tools": [
+        "control_box_display"
+      ],
+      "priority": "medium",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 5
+      },
+      "recommended_checks_en": [
+        "Use the D15 flash count to confirm: Encoder - incorrect selection of left/right turning.",
+        "Check the related wiring, parameter, or component listed in the manual.",
+        "Restart or reprogram only after the physical cause is corrected."
+      ],
+      "meaning_en": "Encoder - incorrect selection of left/right turning"
+    },
+    {
+      "id": "cnd1_d15_flash_8",
+      "type": "d15_led_flash",
+      "flash_count": 8,
+      "title_en": "Encoder - operating voltage faults",
+      "title_zh": "Encoder operating voltage fault",
+      "recommended_checks_zh": [
+        "檢查 connection 和 supply voltage。",
+        "必要時更換 encoder。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter"
+      ],
+      "priority": "high",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 5
+      },
+      "recommended_checks_en": [
+        "Check X13 cabling according to the manual.",
+        "Check 12V supply at X13 1-2.",
+        "Replace the encoder if the problem remains."
+      ],
+      "meaning_en": "Encoder - operating voltage faults"
+    },
+    {
+      "id": "cnd1_d15_flash_9",
+      "type": "d15_led_flash",
+      "flash_count": 9,
+      "title_en": "EEPROM fault on IC4 because of switching on electricity",
+      "title_zh": "IC4 EEPROM fault",
+      "recommended_checks_zh": [
+        "Reset control to factory settings。"
+      ],
+      "tools": [
+        "control_box_display",
+        "dil_switch_check"
+      ],
+      "priority": "high",
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 5
+      },
+      "recommended_checks_en": [
+        "Use the D15 flash count to confirm: EEPROM fault on IC4 because of switching on electricity.",
+        "Check the related wiring, parameter, or component listed in the manual.",
+        "Restart or reprogram only after the physical cause is corrected."
+      ],
+      "meaning_en": "EEPROM fault on IC4 because of switching on electricity"
+    }
+  ],
+  "procedures": [
+    {
+      "id": "cnd1_basic_installation",
+      "type": "procedure",
+      "title_en": "Basic installation",
+      "title_zh": "基本安裝",
+      "aliases": [
+        "installation",
+        "basic installation",
+        "install"
+      ],
+      "steps_zh": [
+        "安裝/接線階段注意：不要先插入 CEE plug。",
+        "確認 DW / Opto / Light curtain / SCD / Passdoor 對應接線：X3.7、X3.8、X20。",
+        "確認 spiral cable、shaft drive encoder、ground wire、feed 和 cable 接入對應端子。",
+        "確認 230V / 400V 接線位置正確。",
+        "完成所有 plug-in plugs 後才進入供電或 programming。"
+      ],
+      "tools": [
+        "visual_inspection",
+        "multimeter"
+      ],
+      "source": {
+        "manual": "EN_4231r3-CND1-Quick-start-guide",
+        "pages": [
+          6,
+          7
+        ]
+      },
+      "steps_en": [
+        "Follow the manual procedure for Basic installation.",
+        "Confirm the door area is safe before operation.",
+        "Check the display after each step and stop if an unexpected movement occurs."
+      ],
+      "meaning_en": "Basic installation"
+    },
+    {
+      "id": "cnd1_basic_programming",
+      "type": "procedure",
+      "title_en": "Basic programming",
+      "title_zh": "基本設定 / 設定開關門終點",
+      "aliases": [
+        "programming",
+        "end positions",
+        "set end position",
+        "basic programming"
+      ],
+      "steps_zh": [
+        "插入 CEE plug 以 programming control box。",
+        "將 switch 1 移到 ON，進入 programming mode。",
+        "設定 open door position：按 manual 指定按鍵直到顯示對應 open position display。",
+        "如果按 UP 時門向下移動，使用一字螺絲刀反轉 CEE plug phases，然後重複設定步驟。",
+        "設定 closed door position。",
+        "將 switch 1 移回 OFF，退出 programming mode。",
+        "測試門的開門與關門操作。"
+      ],
+      "tools": [
+        "control_box_display",
+        "dil_switch_check",
+        "slotted_screwdriver"
+      ],
+      "source": {
+        "manual": "EN_4231r3-CND1-Quick-start-guide",
+        "pages": [
+          8,
+          9
+        ]
+      },
+      "steps_en": [
+        "Follow the manual procedure for Basic programming.",
+        "Confirm the door area is safe before operation.",
+        "Check the display after each step and stop if an unexpected movement occurs."
+      ],
+      "meaning_en": "Basic programming"
+    },
+    {
+      "id": "cnd1_factory_reset",
+      "type": "procedure",
+      "title_en": "Restore factory settings",
+      "title_zh": "恢復出廠設定",
+      "aliases": [
+        "factory reset",
+        "restore factory settings",
+        "FAC",
+        "reset"
+      ],
+      "steps_zh": [
+        "插入 CEE plug。",
+        "將 DIL switch 4 移到 ON / right。",
+        "同時按住 OP 與 STOP（arrow up 和 circle below），直到 display 顯示 FAC。",
+        "將 DIL switch 4 移回 OFF / left。",
+        "Factory settings 已恢復。"
+      ],
+      "tools": [
+        "control_box_display",
+        "dil_switch_check"
+      ],
+      "source": {
+        "manual": "CND1-Error-codes-english",
+        "page": 9
+      },
+      "steps_en": [
+        "Follow the manual procedure for Restore factory settings.",
+        "Confirm the door area is safe before operation.",
+        "Check the display after each step and stop if an unexpected movement occurs."
+      ],
+      "meaning_en": "Restore factory settings"
+    },
+    {
+      "id": "cnd1_remote_control_programming",
+      "type": "procedure",
+      "title_en": "Programming remote control",
+      "title_zh": "遙控器設定",
+      "aliases": [
+        "remote",
+        "remote control",
+        "4274",
+        "4275"
+      ],
+      "steps_zh": [
+        "插入 CEE plug 以連接 remote control。",
+        "按住 plug-in circuit board 上的 button；按住時會有聲音。",
+        "同時按 remote control button。",
+        "測試 remote control 操作；若無效，重複連接程序。"
+      ],
+      "tools": [
+        "visual_inspection"
+      ],
+      "source": {
+        "manual": "EN_4231r3-CND1-Quick-start-guide",
+        "page": 11
+      },
+      "steps_en": [
+        "Follow the manual procedure for Programming remote control.",
+        "Confirm the door area is safe before operation.",
+        "Check the display after each step and stop if an unexpected movement occurs."
+      ],
+      "meaning_en": "Programming remote control"
+    }
+  ],
+  "wiring_guides": [
+    {
+      "id": "cnd1_control_box_installation",
+      "title_en": "Control box installation",
+      "title_zh": "控制箱安裝",
+      "key_points_zh": [
+        "適用 Pro-Line 28/50/70 CND1 control box installation。",
+        "包含 CND1 control box、spiral cable bracket、mounting parts 位置。",
+        "按照 quick start guide 的圖示固定 control box 和 bracket。"
+      ],
+      "source": {
+        "manual": "EN_4231r3-CND1-Quick-start-guide",
+        "page": 3
+      }
+    },
+    {
+      "id": "cnd1_door_control_box_connection",
+      "title_en": "Connection of door control boxes",
+      "title_zh": "門控制盒接線",
+      "key_points_zh": [
+        "按 quick start guide step 1-8 打開控制盒與連接 cables。",
+        "Circuit boards 依 module：Opto module 10+11、DW module 12+13、Duo Opto module 20+21。",
+        "A=Spiral cable，B=Connecting cable，C=OPTO/OSE1/OSE2，D=SCD L/R / PD Switch。"
+      ],
+      "source": {
+        "manual": "EN_4231r3-CND1-Quick-start-guide",
+        "pages": [
+          4,
+          5
+        ]
+      }
+    }
+  ],
+  "search_index": {
+    "keyword_aliases": {
+      "4274": [
+        "cnd1_remote_control_programming"
+      ],
+      "4275": [
+        "cnd1_remote_control_programming"
+      ],
+      "stop": [
+        "cnd1_stop_sign"
+      ],
+      "stop sign": [
+        "cnd1_stop_sign"
+      ],
+      "stop chain": [
+        "cnd1_stop_sign"
+      ],
+      "停止": [
+        "cnd1_stop_sign"
+      ],
+      "停止符號": [
+        "cnd1_stop_sign"
+      ],
+      "stop circuit": [
+        "cnd1_stop_sign"
+      ],
+      "slack": [
+        "cnd1_slack_wicket_switch"
+      ],
+      "slack cable": [
+        "cnd1_slack_wicket_switch"
+      ],
+      "wicket": [
+        "cnd1_slack_wicket_switch"
+      ],
+      "wicket door": [
+        "cnd1_slack_wicket_switch"
+      ],
+      "passdoor": [
+        "cnd1_slack_wicket_switch"
+      ],
+      "鬆纜": [
+        "cnd1_slack_wicket_switch"
+      ],
+      "小門": [
+        "cnd1_slack_wicket_switch"
+      ],
+      "nothing active": [
+        "cnd1_nothing_active"
+      ],
+      "4 chairs": [
+        "cnd1_nothing_active"
+      ],
+      "idle": [
+        "cnd1_nothing_active"
+      ],
+      "無動作": [
+        "cnd1_nothing_active"
+      ],
+      "open reached": [
+        "cnd1_end_position_open"
+      ],
+      "door open": [
+        "cnd1_end_position_open"
+      ],
+      "open position": [
+        "cnd1_end_position_open"
+      ],
+      "開門終點": [
+        "cnd1_end_position_open"
+      ],
+      "closed reached": [
+        "cnd1_end_position_closed"
+      ],
+      "door closed": [
+        "cnd1_end_position_closed"
+      ],
+      "closed position": [
+        "cnd1_end_position_closed"
+      ],
+      "關門終點": [
+        "cnd1_end_position_closed"
+      ],
+      "half open": [
+        "cnd1_end_position_half_open"
+      ],
+      "1/2 open": [
+        "cnd1_end_position_half_open"
+      ],
+      "partial open": [
+        "cnd1_end_position_half_open"
+      ],
+      "半開": [
+        "cnd1_end_position_half_open"
+      ],
+      "external open": [
+        "cnd1_external_open_active"
+      ],
+      "open button": [
+        "cnd1_external_open_active"
+      ],
+      "loop detector": [
+        "cnd1_external_open_active"
+      ],
+      "外部開門": [
+        "cnd1_external_open_active"
+      ],
+      "external closed": [
+        "cnd1_external_closed_active"
+      ],
+      "closed button": [
+        "cnd1_external_closed_active"
+      ],
+      "close button": [
+        "cnd1_external_closed_active"
+      ],
+      "外部關門": [
+        "cnd1_external_closed_active"
+      ],
+      "ga": [
+        "cnd1_ga_impulse_active"
+      ],
+      "ga impulse": [
+        "cnd1_ga_impulse_active"
+      ],
+      "impulse": [
+        "cnd1_ga_impulse_active"
+      ],
+      "photo cell 1": [
+        "cnd1_photo_cell_1_interrupted"
+      ],
+      "photocell 1": [
+        "cnd1_photo_cell_1_interrupted"
+      ],
+      "cell 1": [
+        "cnd1_photo_cell_1_interrupted"
+      ],
+      "光電 1": [
+        "cnd1_photo_cell_1_interrupted"
+      ],
+      "photo cell 2": [
+        "cnd1_photo_cell_2_interrupted"
+      ],
+      "photocell 2": [
+        "cnd1_photo_cell_2_interrupted"
+      ],
+      "cell 2": [
+        "cnd1_photo_cell_2_interrupted"
+      ],
+      "光電 2": [
+        "cnd1_photo_cell_2_interrupted"
+      ],
+      "safety edge not fitted": [
+        "cnd1_safety_edge_not_fitted"
+      ],
+      "parameter 21": [
+        "cnd1_safety_edge_not_fitted"
+      ],
+      "edge parameter": [
+        "cnd1_safety_edge_not_fitted"
+      ],
+      "ser": [
+        "cnd1_ser_door_runs_without_command"
+      ],
+      "runs without command": [
+        "cnd1_ser_door_runs_without_command"
+      ],
+      "motor runs unintentionally": [
+        "cnd1_ser_door_runs_without_command"
+      ],
+      "dw self test": [
+        "cnd1_dw_self_test"
+      ],
+      "self-test dw": [
+        "cnd1_dw_self_test"
+      ],
+      "power limit": [
+        "cnd1_power_limit"
+      ],
+      "parameter 44": [
+        "cnd1_power_limit"
+      ],
+      "run time": [
+        "cnd1_run_time"
+      ],
+      "parameter 51": [
+        "cnd1_run_time"
+      ],
+      "maintenance": [
+        "cnd1_maintenance_counter"
+      ],
+      "counter": [
+        "cnd1_maintenance_counter"
+      ],
+      "photo cell error": [
+        "cnd1_photo_cell_error"
+      ],
+      "photocell error": [
+        "cnd1_photo_cell_error"
+      ],
+      "safety edge": [
+        "cnd1_safety_contact_edge_error"
+      ],
+      "contact edge": [
+        "cnd1_safety_contact_edge_error"
+      ],
+      "speed monitoring": [
+        "cnd1_speed_monitoring"
+      ],
+      "speed too low": [
+        "cnd1_speed_monitoring"
+      ],
+      "e09": [
+        "cnd1_e09_encoder_position_no_change"
+      ],
+      "e:09": [
+        "cnd1_e09_encoder_position_no_change"
+      ],
+      "encoder no change": [
+        "cnd1_e09_encoder_position_no_change"
+      ],
+      "position no change": [
+        "cnd1_e09_encoder_position_no_change"
+      ],
+      "x20 3-4": [
+        "cnd1_second_safety_edge_wicket"
+      ],
+      "second safety edge": [
+        "cnd1_second_safety_edge_wicket"
+      ],
+      "wicket x20": [
+        "cnd1_second_safety_edge_wicket"
+      ],
+      "e20": [
+        "cnd1_eeprom_e20"
+      ],
+      "eeprom": [
+        "cnd1_eeprom_e20"
+      ],
+      "parameter 41": [
+        "cnd1_eeprom_e20"
+      ],
+      "eeprom startup": [
+        "cnd1_eeprom_startup"
+      ],
+      "factory settings": [
+        "cnd1_eeprom_startup"
+      ],
+      "processor": [
+        "cnd1_eeprom_startup"
+      ],
+      "24v": [
+        "cnd1_24_12v_voltage_error"
+      ],
+      "12v": [
+        "cnd1_24_12v_voltage_error"
+      ],
+      "shorted": [
+        "cnd1_24_12v_voltage_error"
+      ],
+      "overloaded": [
+        "cnd1_24_12v_voltage_error"
+      ],
+      "d15 1": [
+        "cnd1_d15_flash_1"
+      ],
+      "d15 flash 1": [
+        "cnd1_d15_flash_1"
+      ],
+      "1 flash": [
+        "cnd1_d15_flash_1"
+      ],
+      "d15 2": [
+        "cnd1_d15_flash_2"
+      ],
+      "d15 flash 2": [
+        "cnd1_d15_flash_2"
+      ],
+      "2 flash": [
+        "cnd1_d15_flash_2"
+      ],
+      "d15 3": [
+        "cnd1_d15_flash_3"
+      ],
+      "d15 flash 3": [
+        "cnd1_d15_flash_3"
+      ],
+      "3 flash": [
+        "cnd1_d15_flash_3"
+      ],
+      "d15 4": [
+        "cnd1_d15_flash_4"
+      ],
+      "d15 flash 4": [
+        "cnd1_d15_flash_4"
+      ],
+      "4 flash": [
+        "cnd1_d15_flash_4"
+      ],
+      "d15 5": [
+        "cnd1_d15_flash_5"
+      ],
+      "d15 flash 5": [
+        "cnd1_d15_flash_5"
+      ],
+      "5 flash": [
+        "cnd1_d15_flash_5"
+      ],
+      "d15 6": [
+        "cnd1_d15_flash_6"
+      ],
+      "d15 flash 6": [
+        "cnd1_d15_flash_6"
+      ],
+      "6 flash": [
+        "cnd1_d15_flash_6"
+      ],
+      "d15 7": [
+        "cnd1_d15_flash_7"
+      ],
+      "d15 flash 7": [
+        "cnd1_d15_flash_7"
+      ],
+      "7 flash": [
+        "cnd1_d15_flash_7"
+      ],
+      "d15 8": [
+        "cnd1_d15_flash_8"
+      ],
+      "d15 flash 8": [
+        "cnd1_d15_flash_8"
+      ],
+      "8 flash": [
+        "cnd1_d15_flash_8"
+      ],
+      "d15 9": [
+        "cnd1_d15_flash_9"
+      ],
+      "d15 flash 9": [
+        "cnd1_d15_flash_9"
+      ],
+      "9 flash": [
+        "cnd1_d15_flash_9"
+      ],
+      "installation": [
+        "cnd1_basic_installation"
+      ],
+      "basic installation": [
+        "cnd1_basic_installation"
+      ],
+      "install": [
+        "cnd1_basic_installation"
+      ],
+      "programming": [
+        "cnd1_basic_programming"
+      ],
+      "end positions": [
+        "cnd1_basic_programming"
+      ],
+      "set end position": [
+        "cnd1_basic_programming"
+      ],
+      "basic programming": [
+        "cnd1_basic_programming"
+      ],
+      "factory reset": [
+        "cnd1_factory_reset"
+      ],
+      "restore factory settings": [
+        "cnd1_factory_reset"
+      ],
+      "fac": [
+        "cnd1_factory_reset"
+      ],
+      "reset": [
+        "cnd1_factory_reset"
+      ],
+      "remote": [
+        "cnd1_remote_control_programming"
+      ],
+      "remote control": [
+        "cnd1_remote_control_programming"
+      ]
+    }
+  },
+  "ui_recommendation": {
+    "no_recording": true,
+    "offline_first": true,
+    "home_buttons": [
+      {
+        "id": "select_symbol",
+        "label_zh": "選擇螢幕符號",
+        "description_zh": "技術人員看到什麼符號，就點選相似圖案。"
+      },
+      {
+        "id": "search_keyword",
+        "label_zh": "輸入關鍵字",
+        "description_zh": "輸入 stop、slack、wicket、E09、D15 1 等。"
+      },
+      {
+        "id": "d15_flash",
+        "label_zh": "D15 LED 閃爍次數",
+        "description_zh": "選擇錯誤燈閃爍 1–9 次。"
+      },
+      {
+        "id": "procedures",
+        "label_zh": "安裝/設定流程",
+        "description_zh": "查看 basic programming、factory reset、remote control 等。"
+      }
+    ]
+  }
+}
