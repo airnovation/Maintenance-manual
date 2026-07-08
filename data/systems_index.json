@@ -43,5 +43,28 @@
         }
       ]
     }
+  ],
+  "instrument_types": [
+    {
+      "id": "leak_detector",
+      "name_en": "Leak detector",
+      "name_zh": "检漏仪",
+      "brands": [
+        {
+          "id": "bacharach",
+          "name_en": "Bacharach",
+          "name_zh": "Bacharach",
+          "instruments": [
+            {
+              "id": "bacharach_h10_pro",
+              "name_en": "H-10 Pro Universal Refrigerant Leak Detector",
+              "name_zh": "H-10 Pro 冷媒检漏仪",
+              "pack": "/data/bacharach_h10_pro_instrument_knowledge_pack_v1_0.json",
+              "diagnostic_modes": ["safety", "pre_use", "leak_search", "sensitivity", "maintenance", "troubleshooting", "parts"]
+            }
+          ]
+        }
+      ]
+    }
   ]
 }

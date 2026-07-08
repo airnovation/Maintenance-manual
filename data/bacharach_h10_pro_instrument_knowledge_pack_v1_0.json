@@ -1,0 +1,472 @@
+{
+  "pack_id": "bacharach_h10_pro_instrument_pack",
+  "version": "1.0",
+  "pack_type": "instrument_knowledge_pack",
+  "instrument": {
+    "instrument_id": "bacharach_h10_pro",
+    "brand": "Bacharach",
+    "model": "H-10 Pro",
+    "name": "Bacharach H-10 Pro Universal Refrigerant Leak Detector",
+    "instrument_type": "refrigerant_leak_detector",
+    "sensor_type": "heated_diode",
+    "technology": "positive ion emission / heated diode",
+    "detects": [
+      "CFC",
+      "HCFC",
+      "HFC"
+    ],
+    "not_for": [
+      "ASHRAE A2 combustible/flammable refrigerants",
+      "ASHRAE A3 combustible/flammable refrigerants",
+      "classified hazardous locations",
+      "continuous monitoring use"
+    ],
+    "typical_warm_up_time": "2 minutes",
+    "response_time": "1 second",
+    "battery": {
+      "type": "12V lead-acid battery",
+      "typical_life": "3 hours",
+      "charging_time": "3-4 hours"
+    },
+    "probe": {
+      "length": "4.5 ft / 1.4 m",
+      "built_in_filter": true
+    },
+    "operating_conditions": {
+      "temperature": "32 to 104°F / 0 to 40°C"
+    },
+    "indications": {
+      "visual": "Red LED in probe tip",
+      "audible": "Internal beeper or stereo headphone jack"
+    },
+    "source_manual": {
+      "title": "H-10 Pro Universal Refrigerant Leak Detector Instruction Manual",
+      "part_number": "3015-9005",
+      "revision": "2",
+      "date": "November 2017"
+    }
+  },
+  "input_methods": [
+    "select_instrument",
+    "select_task",
+    "guided_checklist",
+    "symptom_lookup",
+    "maintenance_lookup"
+  ],
+  "safety_rules": [
+    {
+      "id": "h10_no_flammable_refrigerants",
+      "level": "danger",
+      "title": "Do not use on A2/A3 flammable refrigerants",
+      "message_zh": "不要使用 H-10 Pro 檢測 ASHRAE A2 或 A3 可燃／易燃冷媒。",
+      "message_en": "Do not use this device to detect leaks of refrigerants rated combustible/flammable, such as ASHRAE A2 or A3 refrigerants.",
+      "applies_to": [
+        "pre_use",
+        "leak_checking"
+      ],
+      "source": {
+        "manual": "h-10_pro_user_manual_2_en",
+        "pages": [
+          3,
+          5,
+          12
+        ]
+      }
+    },
+    {
+      "id": "h10_not_intrinsically_safe",
+      "level": "danger",
+      "title": "Not for hazardous classified locations",
+      "message_zh": "本儀器不是 intrinsically safe，不能在 classified hazardous location 使用。",
+      "message_en": "The instrument is not intrinsically safe and must not be used in classified hazardous locations.",
+      "applies_to": [
+        "pre_use"
+      ],
+      "source": {
+        "manual": "h-10_pro_user_manual_2_en",
+        "page": 3
+      }
+    },
+    {
+      "id": "h10_no_liquid_into_probe",
+      "level": "warning",
+      "title": "Do not draw liquid or moisture into probe",
+      "message_zh": "不要讓探頭吸入液體或水分，否則可能損壞 pump。濕／髒表面應先擦乾。",
+      "message_en": "Do not submerge the probe in liquid or draw moisture into the probe; this may damage the pump.",
+      "applies_to": [
+        "leak_checking",
+        "probe_handling"
+      ],
+      "source": {
+        "manual": "h-10_pro_user_manual_2_en",
+        "pages": [
+          4,
+          12,
+          13
+        ]
+      }
+    },
+    {
+      "id": "h10_avoid_high_concentration_exposure",
+      "level": "warning",
+      "title": "Avoid prolonged high concentration exposure",
+      "message_zh": "不要長時間把 probe 停在高濃度冷媒或純冷媒上，會縮短或破壞 sensor 壽命。",
+      "message_en": "Prolonged exposure to pure refrigerant or high concentrations will shorten or destroy sensor life.",
+      "applies_to": [
+        "leak_checking",
+        "sensor_care"
+      ],
+      "source": {
+        "manual": "h-10_pro_user_manual_2_en",
+        "pages": [
+          4,
+          12
+        ]
+      }
+    },
+    {
+      "id": "h10_authorized_service_only",
+      "level": "warning",
+      "title": "Do not open or service beyond consumables",
+      "message_zh": "除 sensor、filter、battery 等耗材更換外，不應自行打開或維修儀器，否則可能影響保固。",
+      "message_en": "Except for consumables such as sensors, filters and battery, the analyzer should only be opened or serviced by authorized Bacharach personnel.",
+      "applies_to": [
+        "maintenance",
+        "repair"
+      ],
+      "source": {
+        "manual": "h-10_pro_user_manual_2_en",
+        "page": 4
+      }
+    },
+    {
+      "id": "h10_hot_sensor_warning",
+      "level": "warning",
+      "title": "Allow sensor to cool before touching",
+      "message_zh": "更換 sensor 前必須等待冷卻，sensor 溫度可能造成燙傷。",
+      "message_en": "Allow the sensor to cool before touching it; sensor temperature may cause burns.",
+      "applies_to": [
+        "sensor_replacement"
+      ],
+      "source": {
+        "manual": "h-10_pro_user_manual_2_en",
+        "page": 17
+      }
+    }
+  ],
+  "pre_use_checklist": [
+    {
+      "id": "h10_pre_use_01",
+      "sequence": 1,
+      "title_zh": "確認冷媒類型",
+      "instruction_zh": "確認待測系統不是 A2 / A3 可燃或易燃冷媒。",
+      "instruction_en": "Confirm the refrigerant is not ASHRAE A2 or A3 combustible/flammable refrigerant.",
+      "blocking": true,
+      "source": {
+        "page": 3
+      }
+    },
+    {
+      "id": "h10_pre_use_02",
+      "sequence": 2,
+      "title_zh": "確認環境",
+      "instruction_zh": "確認現場不是 classified hazardous location。",
+      "instruction_en": "Confirm the area is not a classified hazardous location.",
+      "blocking": true,
+      "source": {
+        "page": 3
+      }
+    },
+    {
+      "id": "h10_pre_use_03",
+      "sequence": 3,
+      "title_zh": "開機並設定 AUTO",
+      "instruction_zh": "開機，Mode switch 設為 AUTO，Leak Size switch 先設為 SMALL 進行 setup check。",
+      "instruction_en": "Turn the unit ON, set Mode to AUTO and Leak Size to SMALL for setup check.",
+      "source": {
+        "pages": [
+          10,
+          14
+        ]
+      }
+    },
+    {
+      "id": "h10_pre_use_04",
+      "sequence": 4,
+      "title_zh": "檢查 Low Battery LED",
+      "instruction_zh": "若 Low Battery LED 亮紅燈，需充電或使用 wall adapter；Low Battery LED 亮時 sensor 不會運作。",
+      "instruction_en": "Check Low Battery LED. If red, charge or use wall adapter; the sensor does not operate when the low battery LED is on.",
+      "source": {
+        "page": 11
+      }
+    },
+    {
+      "id": "h10_pre_use_05",
+      "sequence": 5,
+      "title_zh": "檢查 airflow",
+      "instruction_zh": "探頭朝下，用手指遮住 probe tip 再放開；若 airflow 正常，紅色 airflow ball 應明顯上升。",
+      "instruction_en": "Point probe tip toward floor, cover with finger and release. If airflow is proper, the red ball should rise noticeably.",
+      "source": {
+        "page": 11
+      }
+    },
+    {
+      "id": "h10_pre_use_06",
+      "sequence": 6,
+      "title_zh": "等待 warm-up",
+      "instruction_zh": "等待約 2 分鐘讓 sensor 穩定；穩定後探頭燈與聲音約 1 click/second。",
+      "instruction_en": "Allow about 2 minutes warm-up until probe light and sound idle at about 1 click per second.",
+      "source": {
+        "page": 12
+      }
+    },
+    {
+      "id": "h10_pre_use_07",
+      "sequence": 7,
+      "title_zh": "用 calibration reference bottle 測試",
+      "instruction_zh": "將 probe tip 快速接觸 calibration reference bottle 頂部，儀器應快速閃燈與響應。",
+      "instruction_en": "Quickly touch probe tip to the top of calibration reference bottle. The unit should respond with rapid flash and sound.",
+      "source": {
+        "page": 12
+      }
+    }
+  ],
+  "operation_guides": [
+    {
+      "id": "h10_leak_check_unknown_size",
+      "task_type": "leak_checking",
+      "title_zh": "未知漏點大小的冷媒洩漏檢查",
+      "title_en": "Leak checking when leak size is unknown",
+      "recommended_mode": "Start with LARGE setting, then step down to MEDIUM/SMALL as needed",
+      "steps": [
+        "先確認安全限制：不可用於 A2/A3 可燃冷媒或 hazardous classified location。",
+        "若 leak size 未知，正式檢查時先使用 LARGE leak setting，以保護 sensor。",
+        "按系統邏輯順序檢查：接頭、閥件、焊點、service port、coil、壓縮機周邊等可能漏點。",
+        "若表面潮濕或骯髒，先用乾淨乾布擦乾，避免 filter 堵塞或 probe 吸入水分。",
+        "若 LARGE setting 找到 leak，修復後用 shop air 清除周圍殘留冷媒。",
+        "再用 MEDIUM 或 SMALL setting 重新確認是否還有中小漏點。",
+        "HFC 冷媒如 R134a，修復後建議使用 SMALL setting 確認小漏；CFC/HCFC 如 R12/R22，MEDIUM 通常足夠。"
+      ],
+      "source": {
+        "pages": [
+          12,
+          13
+        ]
+      }
+    },
+    {
+      "id": "h10_auto_mode_pinpoint",
+      "task_type": "leak_pinpointing",
+      "title_zh": "AUTO mode 精準定位漏點",
+      "title_en": "Pinpointing leak in AUTO mode",
+      "steps": [
+        "AUTO mode 會自動降低背景冷媒造成的誤報。",
+        "探頭需要持續移動；如果停在 leak 上，儀器可能 zero out 該 leak。",
+        "若訊號消失，把探頭移離 leak 位置 1–2 秒，讓儀器重新建立 sensitivity。",
+        "再回到 leak 位置掃過，若重複 alarm，即可確認漏點附近。"
+      ],
+      "source": {
+        "pages": [
+          9,
+          10
+        ]
+      }
+    },
+    {
+      "id": "h10_manual_mode_large_leak",
+      "task_type": "leak_pinpointing",
+      "title_zh": "Manual mode 定位大漏點",
+      "title_en": "Using Manual Mode for large leaks",
+      "steps": [
+        "如果現場有大漏，AUTO zero circuit 可能降低 sensitivity，導致難以找中小漏。",
+        "改用 Manual Mode；此模式會停用 auto-zero，探頭停在 leak 上也不會自動 zero out。",
+        "維持約 1 tick/second，必要時調整 Manual Balance control。",
+        "Manual mode sensitivity 高於 AUTO mode，但需要更頻繁調整 balance。"
+      ],
+      "source": {
+        "page": 10
+      }
+    },
+    {
+      "id": "h10_daily_heater_adjustment_check",
+      "task_type": "calibration_check",
+      "title_zh": "每日 sensor heat / sensitivity 檢查",
+      "title_en": "Daily heater adjustment check",
+      "steps": [
+        "Mode 設 AUTO，Leak switch 設 SMALL，開機並穩定約 2 分鐘。",
+        "用 calibration reference bottle 快速測試 probe tip。",
+        "如果紅色 LOW LED 仍亮，sensor heat 太低，將 heater adjustment 稍微順時針調整。",
+        "如果紅色 HIGH LED 亮，sensor heat 太高，將 heater adjustment 稍微逆時針調整。",
+        "目標是 green OK LED 短暫亮起。",
+        "完成初始校準後，後續 leak testing 時不再根據 calibration LEDs 判斷。"
+      ],
+      "source": {
+        "pages": [
+          14,
+          15
+        ]
+      }
+    }
+  ],
+  "sensitivity_settings": [
+    {
+      "setting": "SMALL",
+      "sensitivity": "highest",
+      "recommended_for": [
+        "HFC refrigerants such as R134a",
+        "calibration verification",
+        "small leak verification after repair"
+      ],
+      "notes_zh": "最高靈敏度；用於 HFC 小漏確認和 calibration reference bottle 測試。"
+    },
+    {
+      "setting": "MEDIUM",
+      "sensitivity": "medium",
+      "recommended_for": [
+        "CFC/HCFC refrigerants such as R12 and R22",
+        "larger HFC leaks",
+        "post-repair confirmation for CFC/HCFC systems"
+      ],
+      "notes_zh": "適合 CFC/HCFC，例如 R12/R22，也可用於較大 HFC 漏點。"
+    },
+    {
+      "setting": "LARGE",
+      "sensitivity": "lowest / large leak locating",
+      "recommended_for": [
+        "large leaks",
+        "unknown leak size initial search",
+        "manual mode large leak pinpointing"
+      ],
+      "notes_zh": "未知漏點大小時先用 LARGE，以降低 sensor 暴露風險。"
+    }
+  ],
+  "maintenance_cards": [
+    {
+      "id": "h10_replace_filter",
+      "title_zh": "更換 probe filter",
+      "title_en": "Replace probe filter",
+      "trigger_zh": "filter 變髒、變濕，或中等使用量下約每月一次；高粉塵或高頻使用需更頻繁。",
+      "steps_zh": [
+        "拆下黑色 rubber probe tip。",
+        "用 pin 或 tweezers 取出舊 filter。",
+        "確認 probe nozzle 內的 fine screen 保留在原位。",
+        "插入新 filter，確保緊貼 screen。",
+        "裝回 rubber probe tip。"
+      ],
+      "source": {
+        "page": 16
+      }
+    },
+    {
+      "id": "h10_replace_airflow_indicator",
+      "title_zh": "更換 airflow indicator ball",
+      "title_en": "Replace airflow indicator ball",
+      "steps_zh": [
+        "輕拉並旋轉取下 clear plastic probe tip section。",
+        "將 probe tip 倒置並輕敲，取出舊 airflow indicator ball。",
+        "放入新的 airflow indicator ball。",
+        "重新裝回 probe tip。"
+      ],
+      "source": {
+        "pages": [
+          16,
+          17
+        ]
+      }
+    },
+    {
+      "id": "h10_replace_sensor",
+      "title_zh": "更換 sensor",
+      "title_en": "Replace sensor",
+      "trigger_zh": "即使 heater adjustment 轉到最順時針，儀器仍不對 calibration reference bottle 有反應。",
+      "steps_zh": [
+        "關閉 leak detector。",
+        "將 heater adjustment 轉到最逆時針位置。",
+        "拔掉 power cord，打開 sensor cover。",
+        "等待 sensor 冷卻後才可接觸。",
+        "拔除並丟棄舊 sensor。",
+        "插入新 sensor，關上 sensor cover。",
+        "依 heater adjustment 流程重新調整。"
+      ],
+      "source": {
+        "page": 17
+      }
+    }
+  ],
+  "troubleshooting_cards": [
+    {
+      "id": "h10_no_response_to_calibration_bottle",
+      "problem_zh": "對 calibration reference bottle 沒有反應",
+      "causes_solutions_zh": [
+        "Heater adjustment 太低或 calibration bottle 已空：重新調整 heater 或更換 bottle。",
+        "沒有 airflow：更換 probe tip filter，並確認 pump 運作。",
+        "Sensor 暴露在過量 halogen gas：移到乾淨空氣中幾分鐘讓 sensor purge。",
+        "Probe 內有水：關機並斷開 probe，按 manual 程序用 clean air 吹乾並更換 filter。"
+      ],
+      "source": {
+        "page": 18
+      }
+    },
+    {
+      "id": "h10_erratic_response_all_positions",
+      "problem_zh": "所有 leak position 都出現不穩定反應",
+      "causes_solutions_zh": [
+        "Filter 堵塞：更換 filter。",
+        "Sensor 有 dirt：取出 sensor 並用 clean air 吹，不超過 10 psi；無效則更換 sensor 和 filter。",
+        "Sensor short circuit：更換 sensor。",
+        "環境冷媒濃度過高：通風。"
+      ],
+      "source": {
+        "page": 19
+      }
+    },
+    {
+      "id": "h10_continuous_response_small_setting",
+      "problem_zh": "尤其在 SMALL setting 時持續反應",
+      "causes_solutions_zh": [
+        "Detector sensitivity 過高：重新調整 heater。"
+      ],
+      "source": {
+        "page": 19
+      }
+    }
+  ],
+  "spare_parts": [
+    {
+      "part_number": "3015-0486",
+      "description": "Replacement sensor"
+    },
+    {
+      "part_number": "3015-0781",
+      "description": "Tune-up kit: sensor, filters, airflow balls, rubber probe tips, calibration bottle"
+    },
+    {
+      "part_number": "3015-0784",
+      "description": "Maintenance kit: filters, airflow balls, rubber probe tips, calibration bottle"
+    },
+    {
+      "part_number": "3015-0737",
+      "description": "Maintenance kit: filters and airflow balls"
+    },
+    {
+      "part_number": "3015-0864",
+      "description": "Calibration reference bottle"
+    },
+    {
+      "part_number": "3015-0103",
+      "description": "Battery"
+    },
+    {
+      "part_number": "3015-0641",
+      "description": "Clear probe tip"
+    },
+    {
+      "part_number": "3015-5942",
+      "description": "Rubber probe tip"
+    },
+    {
+      "part_number": "3015-5941",
+      "description": "Probe assembly"
+    }
+  ]
+}

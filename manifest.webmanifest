@@ -1,7 +1,7 @@
 {
-  "name": "Door Code Helper",
-  "short_name": "Door Codes",
-  "description": "Offline-first Fermod Kit 5000 / 5010 display code helper.",
+  "name": "Technician Helper",
+  "short_name": "Tech Helper",
+  "description": "Offline-first technician diagnostic and instrument helper.",
   "start_url": "/Maintenance-manual",
   "scope": "/Maintenance-manual",
   "display": "standalone",
