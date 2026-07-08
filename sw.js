@@ -1,4 +1,4 @@
-const CACHE_NAME = "technician-helper-v11";
+const CACHE_NAME = "technician-helper-v12";
 const APP_SHELL = [
   "/Maintenance-manual",
   "/Maintenance-manual/.nojekyll",
@@ -8,16 +8,16 @@ const APP_SHELL = [
   "/Maintenance-manual/__next._head.txt",
   "/Maintenance-manual/__next._index.txt",
   "/Maintenance-manual/__next._tree.txt",
-  "/Maintenance-manual/_next/static/9inKhbeJwYlgDoF3eXgl8/_buildManifest.js",
-  "/Maintenance-manual/_next/static/9inKhbeJwYlgDoF3eXgl8/_clientMiddlewareManifest.js",
-  "/Maintenance-manual/_next/static/9inKhbeJwYlgDoF3eXgl8/_ssgManifest.js",
+  "/Maintenance-manual/_next/static/QXsqG4DMdPQ2dVsfYDc74/_buildManifest.js",
+  "/Maintenance-manual/_next/static/QXsqG4DMdPQ2dVsfYDc74/_clientMiddlewareManifest.js",
+  "/Maintenance-manual/_next/static/QXsqG4DMdPQ2dVsfYDc74/_ssgManifest.js",
   "/Maintenance-manual/_next/static/chunks/0cz1d0mv5g_q7.js",
-  "/Maintenance-manual/_next/static/chunks/0uc75hcbp5mon.js",
   "/Maintenance-manual/_next/static/chunks/158myu8e_yme3.js",
   "/Maintenance-manual/_next/static/chunks/1jq4o6yq14o4c.js",
+  "/Maintenance-manual/_next/static/chunks/2lk9qfffmqxif.js",
   "/Maintenance-manual/_next/static/chunks/2sh8l83givr4f.js",
-  "/Maintenance-manual/_next/static/chunks/2tnrpl-82oru9.css",
   "/Maintenance-manual/_next/static/chunks/3rxl-jt3pdxgx.js",
+  "/Maintenance-manual/_next/static/chunks/44m3-hhg8wtmg.css",
   "/Maintenance-manual/_next/static/chunks/turbopack-0172wb27ie8xp.js",
   "/Maintenance-manual/_not-found.html",
   "/Maintenance-manual/_not-found.txt",
