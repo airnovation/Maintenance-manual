@@ -38,7 +38,7 @@ public class SettingsActivity extends Activity {
         layout.addView(title);
 
         TextView details = new TextView(this);
-        details.setText("\n1. Allow microphone access.\n2. Enable the keyboard in Android Settings.\n3. Select AI Voice Keyboard as your input method.\n4. Open WhatsApp, Gmail or any text box.\n\nSpeech recognition uses your device's speech service. AI translation sends only the preview text to your selected provider (OpenAI or Gemini) when you tap AI English. This keyboard never sends a message for you.\n");
+        details.setText("\n1. Allow microphone access.\n2. Enable the keyboard in Android Settings.\n3. Select AI Voice Keyboard as your input method.\n4. Open WhatsApp, Gmail or any text box.\n\nMic records until you tap Stop, then sends audio to your selected provider (OpenAI or Gemini) for transcription. The temporary recording is deleted after processing. Recognised text is sent for English translation. Review before Insert; this keyboard never sends messages for you.\n");
         layout.addView(details);
 
         Button permission = new Button(this);
@@ -66,12 +66,12 @@ public class SettingsActivity extends Activity {
         layout.addView(select);
 
         Button updates = new Button(this);
-        updates.setText("Check New Test Builds");
+        updates.setText("Open GitHub Test Builds");
         updates.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW,
                 Uri.parse("https://github.com/airnovation/Maintenance-manual/actions"))));
         layout.addView(updates);
         TextView updateNote = new TextView(this);
-        updateNote.setText("Opens GitHub builds. Automatic installation is not available yet; Android will still require your approval.");
+        updateNote.setText("Opens GitHub build history. This is not an automatic update checker. You still need to download a new APK and approve installation; debug test signatures may require uninstalling the old version.");
         layout.addView(updateNote);
 
         TextView providerLabel = new TextView(this);
@@ -102,11 +102,11 @@ public class SettingsActivity extends Activity {
         layout.addView(key);
 
         TextView keyInfo = new TextView(this);
-        keyInfo.setText("\nAPI key is encrypted locally using Android Keystore. Never paste it in GitHub or WhatsApp. OpenAI and Gemini require different keys. OpenAI API billing is separate from ChatGPT subscriptions. Leave blank if you only want Chinese speech-to-text.\n");
+        keyInfo.setText("\nAPI key is encrypted locally using Android Keystore. Never paste it in GitHub or WhatsApp. OpenAI and Gemini require different keys. OpenAI API billing is separate from ChatGPT subscriptions. An API key is required for voice transcription in this test version.\n");
         layout.addView(keyInfo);
 
         TextView keyStatus = new TextView(this);
-        keyStatus.setText("No key is required to test Chinese speech recognition.");
+        keyStatus.setText("Save a Gemini or OpenAI API key to use the Mic feature.");
         keyStatus.setTextSize(14);
         layout.addView(keyStatus);
 
