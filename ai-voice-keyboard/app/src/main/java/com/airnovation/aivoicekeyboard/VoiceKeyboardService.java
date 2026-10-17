@@ -117,6 +117,8 @@ public class VoiceKeyboardService extends InputMethodService {
         super.onStartInput(attribute, restarting);
         generation++;
         discardRecording();
+        processingAudio = false;
+        translating = false;
         sensitiveField = isSensitive(attribute);
         if (preview != null) preview.setText("");
         applySensitiveState();
@@ -175,7 +177,9 @@ public class VoiceKeyboardService extends InputMethodService {
         discardRecording();
         try {
             File file = File.createTempFile("voice_segment_", ".m4a", getCacheDir());
+            recordingFile = file;
             MediaRecorder newRecorder = new MediaRecorder();
+            recorder = newRecorder;
             newRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
             newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
             newRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
@@ -184,8 +188,6 @@ public class VoiceKeyboardService extends InputMethodService {
             newRecorder.setOutputFile(file.getAbsolutePath());
             newRecorder.prepare();
             newRecorder.start();
-            recordingFile = file;
-            recorder = newRecorder;
             recordStarted = android.os.SystemClock.elapsedRealtime();
             recording = true;
             generation++;
@@ -361,7 +363,10 @@ public class VoiceKeyboardService extends InputMethodService {
 
     @Override public void onFinishInputView(boolean finishingInput) {
         super.onFinishInputView(finishingInput);
+        generation++; // Invalidate pending async speech/translation callbacks.
         discardRecording();
+        processingAudio = false;
+        translating = false;
     }
 
     @Override public void onDestroy() {
