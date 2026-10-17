@@ -11,6 +11,7 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Spinner;
+import android.widget.ScrollView;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -23,7 +24,10 @@ public class SettingsActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        ScrollView scroll = new ScrollView(this);
         LinearLayout layout = new LinearLayout(this);
+        scroll.setFillViewport(true);
+        scroll.addView(layout);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(24, 28, 24, 16);
 
@@ -135,6 +139,6 @@ public class SettingsActivity extends Activity {
             }
         });
         layout.addView(remove);
-        setContentView(layout);
+        setContentView(scroll);
     }
 }
