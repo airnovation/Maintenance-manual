@@ -91,6 +91,11 @@ public class SettingsActivity extends Activity {
         keyInfo.setText("\nAPI key is encrypted locally using Android Keystore. Never paste it in GitHub or WhatsApp. OpenAI and Gemini require different keys. OpenAI API billing is separate from ChatGPT subscriptions. Leave blank if you only want Chinese speech-to-text.\n");
         layout.addView(keyInfo);
 
+        TextView keyStatus = new TextView(this);
+        keyStatus.setText("No key is required to test Chinese speech recognition.");
+        keyStatus.setTextSize(14);
+        layout.addView(keyStatus);
+
         Button save = new Button(this);
         save.setText("Save API Key Locally");
         save.setOnClickListener(v -> {
@@ -100,11 +105,18 @@ public class SettingsActivity extends Activity {
                 return;
             }
             try {
-                SecureSettings.saveApiKey(this, input,
-                        provider.getSelectedItemPosition() == 1 ? "gemini" : "openai");
+                String selected = provider.getSelectedItemPosition() == 1 ? "gemini" : "openai";
+                SecureSettings.saveApiKey(this, input, selected);
+                if (!input.equals(SecureSettings.getApiKey(this, selected))) {
+                    throw new IllegalStateException("Encrypted key could not be read back");
+                }
                 key.setText("");
-                Toast.makeText(this, "Key for selected provider saved securely", Toast.LENGTH_SHORT).show();
+                keyStatus.setText("Saved and verified: " + selected + " key. The key stays on this phone.");
+                Toast.makeText(this, "API key saved securely", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
+                // Show the exception TYPE only. Never print or log the secret key itself.
+                keyStatus.setText("Save failed: " + e.getClass().getSimpleName()
+                        + ". The key was not confirmed saved.");
                 Toast.makeText(this, "Could not save key", Toast.LENGTH_LONG).show();
             }
         });
@@ -116,6 +128,7 @@ public class SettingsActivity extends Activity {
             try {
                 SecureSettings.saveApiKey(this, "",
                         provider.getSelectedItemPosition() == 1 ? "gemini" : "openai");
+                keyStatus.setText("Selected provider's key removed.");
                 Toast.makeText(this, "Key for selected provider removed", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
                 Toast.makeText(this, "Could not remove key", Toast.LENGTH_LONG).show();
