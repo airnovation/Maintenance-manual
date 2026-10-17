@@ -86,13 +86,7 @@ public final class GeminiEnglish {
     }
 
     private static JSONObject buildRequest(String original) throws Exception {
-        String instruction = "You are editing a short workplace message for a Singapore engineering operations manager. "
-                + "Translate Chinese, Malay, or mixed-language speech into natural, clear, concise English. "
-                + "Use friendly, professional everyday wording suitable for WhatsApp and email. "
-                + "Preserve meaning exactly: all numbers, measurement units, technical terminology, names, "
-                + "constraints, uncertainty and commitments. "
-                + "Use engineering terms including Anchor, Unit Cooler, Condensing Unit, Method Statement, ASRS. "
-                + "Never invent promises or facts. Return only the English message, without commentary.";
+        String instruction = "Translate or lightly rewrite the user's Mandarin Chinese, Malay, English or mixed-language message into NATURAL, CONCISE everyday English for a WhatsApp work chat in Singapore. Do not make it sound like a formal email, report, announcement, or chatbot. Fragments, short questions and sentence fragments are welcome; DO NOT force every message into a complete grammatical sentence. Keep the same casual level and intent as the user. Use a few words when a few words are enough; avoid padding, greetings, sign-offs, politeness not present in the source, and unnecessary 'I/we/please/kindly'. Examples: 还没确认 -> Not confirmed yet. | 明天进场？ -> On site tomorrow? | 等材料到了再安排 -> Arrange after the materials arrive. | 那边还没回复 -> No reply from their side yet. Preserve all meaning, people, names, numbers, units, dates, time, negation, uncertainty, questions and commitments exactly as given. Never invent details, instructions, approvals, promises or subjects. Keep engineering terms such as Anchor, Unit Cooler, Condensing Unit, ASRS and Method Statement accurate and familiar to Singapore site colleagues. Return ONLY the English chat message without explanation, labels or quotes.";
         JSONObject body = new JSONObject();
         body.put("systemInstruction", new JSONObject().put("parts",
                 new JSONArray().put(new JSONObject().put("text", instruction))));
