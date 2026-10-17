@@ -11,6 +11,7 @@ import android.os.Bundle;
 import android.media.MediaRecorder;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Build;
 import java.io.File;
 import android.text.InputType;
 import android.view.View;
@@ -31,6 +32,10 @@ public class VoiceKeyboardService extends InputMethodService {
     private Button mic;
     private Button improve;
     private Button insert;
+    private Button undo;
+    // Only hold undo data in RAM for the current input field.
+    private String undoBefore;
+    private String undoAfter;
     private MediaRecorder recorder;
     private File recordingFile;
     private long recordStarted;
@@ -68,6 +73,8 @@ public class VoiceKeyboardService extends InputMethodService {
 
         mic = makeButton(row, "Mic", () -> toggleRecording());
         improve = makeButton(row, "EN", () -> translate());
+        undo = makeButton(row, "Undo", () -> undoLastTranslation());
+        undo.setEnabled(false);
         insert = makeButton(row, "Insert", () -> insertText());
         insert.setVisibility(View.GONE); // Emergency fallback only when auto-insert fails.
 
@@ -75,9 +82,13 @@ public class VoiceKeyboardService extends InputMethodService {
         other.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(other);
         makeButton(other, "⌫ Delete", () -> deleteFromChatInput());
-        makeButton(other, "Other Keyboard", () -> {
-            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (imm != null) imm.showInputMethodPicker();
+        makeButton(other, "↩ Keyboard", () -> {
+            // Android 9+ can return directly to the most recently used keyboard.
+            boolean switched = Build.VERSION.SDK_INT >= 28 && switchToPreviousInputMethod();
+            if (!switched) {
+                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) imm.showInputMethodPicker();
+            }
         });
         preview = new EditText(this);
         preview.setTextSize(16);
@@ -114,6 +125,7 @@ public class VoiceKeyboardService extends InputMethodService {
         discardRecording();
         processingAudio = false;
         translating = false;
+        clearUndo();
         sensitiveField = isSensitive(attribute);
         if (preview != null) preview.setText("");
         if (insert != null) insert.setVisibility(View.GONE);
@@ -143,6 +155,7 @@ public class VoiceKeyboardService extends InputMethodService {
         if (mic != null) mic.setEnabled(!sensitiveField && !processingAudio && !translating);
         if (improve != null) improve.setEnabled(!sensitiveField && !processingAudio && !recording);
         if (insert != null) insert.setEnabled(!sensitiveField && !processingAudio && !translating && !recording);
+        if (undo != null) undo.setEnabled(!sensitiveField && !processingAudio && !translating && !recording && undoAfter != null);
         if (preview != null) preview.setEnabled(!sensitiveField);
         if (status != null) status.setText(sensitiveField
                 ? "Sensitive field: voice & AI disabled. Switch to a trusted keyboard."
@@ -302,6 +315,7 @@ public class VoiceKeyboardService extends InputMethodService {
             return;
         }
 
+        clearUndo();
         int token = ++generation;
         translating = true;
         if (improve != null) improve.setEnabled(false);
@@ -324,6 +338,7 @@ public class VoiceKeyboardService extends InputMethodService {
                 return;
             }
             String english = result.trim();
+            String chatBeforeInsertion = fromTypedChat ? originalChat : readChatDraft();
             boolean inserted = false;
             if (fromTypedChat) {
                 // Never overwrite typing that changed while the API request was running.
@@ -347,6 +362,8 @@ public class VoiceKeyboardService extends InputMethodService {
                 if (connection != null) inserted = connection.commitText(english, 1);
             }
             if (inserted) {
+                String chatAfterInsertion = readChatDraft();
+                saveUndo(chatBeforeInsertion, chatAfterInsertion);
                 generation++;
                 preview.setText("");
                 if (insert != null) insert.setVisibility(View.GONE);
@@ -392,7 +409,9 @@ public class VoiceKeyboardService extends InputMethodService {
             status.setText("Tap a message input box first.");
             return;
         }
+        String before = readChatDraft();
         if (connection.commitText(value, 1)) {
+            saveUndo(before, readChatDraft());
             generation++;
             preview.setText("");
             if (insert != null) insert.setVisibility(View.GONE);
@@ -400,6 +419,51 @@ public class VoiceKeyboardService extends InputMethodService {
             status.setText("Inserted into chat. Review before sending.");
         } else {
             status.setText("Insert failed. Tap the message input box and retry.");
+        }
+    }
+
+    private void clearUndo() {
+        undoBefore = null;
+        undoAfter = null;
+        if (undo != null) undo.setEnabled(false);
+    }
+
+    private void saveUndo(String before, String after) {
+        clearUndo();
+        if (before == null || after == null || after.isEmpty() || after.equals(before)) return;
+        undoBefore = before;
+        undoAfter = after;
+        if (undo != null) undo.setEnabled(!sensitiveField);
+    }
+
+    private void undoLastTranslation() {
+        if (sensitiveField || recording || translating || processingAudio || undoAfter == null) return;
+        String current = readChatDraft();
+        if (!undoAfter.equals(current)) {
+            // Do not wipe any typing or editing that happened after translation.
+            clearUndo();
+            if (status != null) status.setText("Chat was edited since translation; Undo cancelled to protect your text.");
+            return;
+        }
+        InputConnection connection = getCurrentInputConnection();
+        if (connection == null) {
+            if (status != null) status.setText("Tap a chat input box to undo.");
+            return;
+        }
+        boolean restored = false;
+        connection.beginBatchEdit();
+        try {
+            if (connection.setSelection(0, current.length())) {
+                restored = connection.commitText(undoBefore, 1);
+            }
+        } finally {
+            connection.endBatchEdit();
+        }
+        if (restored) {
+            clearUndo();
+            if (status != null) status.setText("Previous chat draft restored. Nothing was sent.");
+        } else if (status != null) {
+            status.setText("Unable to restore in this input field; draft not intentionally changed.");
         }
     }
 
@@ -433,10 +497,12 @@ public class VoiceKeyboardService extends InputMethodService {
         discardRecording();
         processingAudio = false;
         translating = false;
+        clearUndo();
     }
 
     @Override public void onDestroy() {
         discardRecording();
+        clearUndo();
         super.onDestroy();
     }
 }
