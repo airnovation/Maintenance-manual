@@ -3,6 +3,7 @@ package com.airnovation.aivoicekeyboard;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.net.Uri;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -63,6 +64,15 @@ public class SettingsActivity extends Activity {
             if (imm != null) imm.showInputMethodPicker();
         });
         layout.addView(select);
+
+        Button updates = new Button(this);
+        updates.setText("Check New Test Builds");
+        updates.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW,
+                Uri.parse("https://github.com/airnovation/Maintenance-manual/actions"))));
+        layout.addView(updates);
+        TextView updateNote = new TextView(this);
+        updateNote.setText("Opens GitHub builds. Automatic installation is not available yet; Android will still require your approval.");
+        layout.addView(updateNote);
 
         TextView providerLabel = new TextView(this);
         providerLabel.setText("AI Provider (select now or later)");
