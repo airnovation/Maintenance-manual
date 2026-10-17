@@ -8,9 +8,10 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.inputmethodservice.InputMethodService;
 import android.os.Bundle;
-import android.speech.RecognitionListener;
-import android.speech.RecognizerIntent;
-import android.speech.SpeechRecognizer;
+import android.media.MediaRecorder;
+import android.os.Handler;
+import android.os.Looper;
+import java.io.File;
 import android.text.InputType;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
@@ -28,11 +29,22 @@ public class VoiceKeyboardService extends InputMethodService {
     private Button mic;
     private Button improve;
     private Button insert;
-    private SpeechRecognizer recognizer;
+    private MediaRecorder recorder;
+    private File recordingFile;
+    private long recordStarted;
+    private boolean recording = false;
+    private boolean processingAudio = false;
     private boolean sensitiveField = false;
-    private boolean listening = false;
     private int generation = 0;
     private boolean translating = false;
+    private static final long MAX_RECORD_MS = 3 * 60 * 1000L;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable stopAtLimit = () -> {
+        if (recording) {
+            finishRecording();
+            if (status != null) status.setText("Maximum recording length reached. Processing audio…");
+        }
+    };
 
     @Override public View onCreateInputView() {
         LinearLayout root = new LinearLayout(this);
@@ -44,7 +56,7 @@ public class VoiceKeyboardService extends InputMethodService {
         status = new TextView(this);
         status.setTextSize(15);
         status.setTextColor(0xff202020);
-        status.setText("Mic → English (if API is set) → Review → Insert");
+        status.setText("Tap Mic to record, tap Stop to finish. AI translates after recording.");
         root.addView(status);
 
         // Keep every action above the preview, away from the phone's bottom navigation bar.
@@ -52,7 +64,7 @@ public class VoiceKeyboardService extends InputMethodService {
         row.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(row);
 
-        mic = makeButton(row, "Mic", () -> startSpeech());
+        mic = makeButton(row, "Mic", () -> toggleRecording());
         improve = makeButton(row, "AI English", () -> translate());
         insert = makeButton(row, "Insert", () -> insertText());
 
@@ -61,8 +73,11 @@ public class VoiceKeyboardService extends InputMethodService {
         root.addView(other);
         makeButton(other, "⌫ Delete", () -> deleteFromChatInput());
         makeButton(other, "Clear Draft", () -> {
+            discardRecording();
             generation++;
+            processingAudio = false;
             translating = false;
+            if (mic != null) { mic.setEnabled(true); mic.setText("Mic"); }
             if (improve != null) improve.setEnabled(true);
             if (insert != null) insert.setEnabled(true);
             preview.setText("");
@@ -101,7 +116,7 @@ public class VoiceKeyboardService extends InputMethodService {
     @Override public void onStartInput(EditorInfo attribute, boolean restarting) {
         super.onStartInput(attribute, restarting);
         generation++;
-        stopListening();
+        discardRecording();
         sensitiveField = isSensitive(attribute);
         if (preview != null) preview.setText("");
         applySensitiveState();
@@ -126,77 +141,145 @@ public class VoiceKeyboardService extends InputMethodService {
     }
 
     private void applySensitiveState() {
-        if (mic != null) mic.setEnabled(!sensitiveField);
-        if (improve != null) improve.setEnabled(!sensitiveField);
-        if (insert != null) insert.setEnabled(!sensitiveField && !translating);
+        if (mic != null) mic.setEnabled(!sensitiveField && !processingAudio && !translating);
+        if (improve != null) improve.setEnabled(!sensitiveField && !processingAudio && !recording);
+        if (insert != null) insert.setEnabled(!sensitiveField && !processingAudio && !translating && !recording);
         if (preview != null) preview.setEnabled(!sensitiveField);
         if (status != null) status.setText(sensitiveField
                 ? "Sensitive field: voice & AI disabled. Switch to a trusted keyboard."
-                : "Mic → English (if API is set) → Review → Insert");
+                : "Tap Mic to record; tap Stop to finish; review English before Insert.");
     }
 
-    private void startSpeech() {
-        if (sensitiveField) return;
+    /**
+     * Manual start/stop: never use SpeechRecognizer's silence-based end detection.
+     * Audio stays in private app cache until Stop is pressed, then is sent to
+     * the user's selected provider for transcription and deleted.
+     */
+    private void toggleRecording() {
+        if (recording) {
+            finishRecording();
+            return;
+        }
+        if (sensitiveField || processingAudio || translating) return;
+        String provider = selectedProvider();
+        String key = SecureSettings.getApiKey(this, provider);
+        if (key.isEmpty()) {
+            status.setText("Set up " + ("gemini".equals(provider) ? "Gemini" : "OpenAI")
+                    + " API key in app settings for manual recording.");
+            return;
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            status.setText("Open AI Voice Keyboard app and allow microphone permission.");
+            status.setText("Allow microphone access from the AI Voice Keyboard app.");
             return;
         }
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            status.setText("No Android speech recognition service available on this device.");
-            return;
-        }
-        generation++;
-        stopListening();
+        discardRecording();
         try {
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
-            recognizer.setRecognitionListener(new RecognitionListener() {
-                @Override public void onReadyForSpeech(Bundle params) { if (status != null) status.setText("Listening…"); }
-                @Override public void onBeginningOfSpeech() { }
-                @Override public void onRmsChanged(float rmsdB) { }
-                @Override public void onBufferReceived(byte[] buffer) { }
-                @Override public void onEndOfSpeech() { if (status != null) status.setText("Recognizing…"); }
-                @Override public void onError(int error) {
-                    listening = false;
-                    if (status != null) status.setText(error == SpeechRecognizer.ERROR_NO_MATCH
-                            ? "No speech recognised. Tap Mic once and start talking when Listening appears."
-                            : "Speech error (" + error + "). Try again.");
-                }
-                @Override public void onResults(Bundle results) {
-                    listening = false;
-                    java.util.ArrayList<String> found = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    if (found == null || found.isEmpty() || preview == null || sensitiveField) {
-                        if (status != null) status.setText("No speech found.");
-                        return;
-                    }
-                    String existing = preview.getText().toString().trim();
-                    preview.setText(existing.isEmpty() ? found.get(0) : existing + " " + found.get(0));
-                    preview.setSelection(preview.length());
-                    if (status != null) status.setText("Transcript ready. Checking AI configuration…");
-                    String provider = getSharedPreferences("voice_keyboard_settings", Context.MODE_PRIVATE)
-                            .getString("selected_provider", "openai");
-                    if (SecureSettings.getApiKey(VoiceKeyboardService.this, provider).isEmpty()) {
-                        status.setText("Chinese transcript ready. Add an API key for automatic English.");
-                    } else {
-                        translate();
-                    }
-                }
-                @Override public void onPartialResults(Bundle results) { }
-                @Override public void onEvent(int eventType, Bundle params) { }
-            });
-            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN");
-            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
-            recognizer.startListening(intent);
-            listening = true;
+            File file = File.createTempFile("voice_segment_", ".m4a", getCacheDir());
+            MediaRecorder newRecorder = new MediaRecorder();
+            newRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            newRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            newRecorder.setAudioEncodingBitRate(64000);
+            newRecorder.setAudioSamplingRate(16000);
+            newRecorder.setOutputFile(file.getAbsolutePath());
+            newRecorder.prepare();
+            newRecorder.start();
+            recordingFile = file;
+            recorder = newRecorder;
+            recordStarted = android.os.SystemClock.elapsedRealtime();
+            recording = true;
+            generation++;
+            // Every new Mic session starts a fresh message; no need to press Clear.
+            if (preview != null) preview.setText("");
+            mic.setText("Stop");
+            improve.setEnabled(false);
+            insert.setEnabled(false);
+            status.setText("Recording… speak naturally. Tap Stop when finished.");
+            handler.postDelayed(stopAtLimit, MAX_RECORD_MS);
         } catch (Exception e) {
-            status.setText("Speech recognition unavailable.");
-            stopListening();
+            discardRecording();
+            status.setText("Could not start microphone (" + e.getClass().getSimpleName()
+                    + "). Check permissions and other apps using the mic.");
         }
+    }
+
+    private void finishRecording() {
+        if (!recording) return;
+        handler.removeCallbacks(stopAtLimit);
+        recording = false;
+        if (mic != null) mic.setText("Mic");
+        File file = recordingFile;
+        recordingFile = null;
+        MediaRecorder current = recorder;
+        recorder = null;
+        boolean saved = false;
+        try {
+            if (current != null) {
+                current.stop();
+                saved = true;
+            }
+        } catch (Exception e) {
+            if (status != null) status.setText("Recording too short or interrupted. Try again.");
+        } finally {
+            if (current != null) try { current.release(); } catch (Exception ignored) { }
+        }
+        if (!saved || file == null || android.os.SystemClock.elapsedRealtime() - recordStarted < 500) {
+            if (file != null) file.delete();
+            if (status != null) status.setText("Recording was too short. Tap Mic and speak for a moment.");
+            if (mic != null) mic.setEnabled(true);
+            if (improve != null) improve.setEnabled(true);
+            if (insert != null) insert.setEnabled(true);
+            return;
+        }
+        processingAudio = true;
+        if (mic != null) mic.setEnabled(false);
+        if (improve != null) improve.setEnabled(false);
+        if (insert != null) insert.setEnabled(false);
+        if (status != null) status.setText("Transcribing Chinese / English / Malay speech…");
+        final int token = generation;
+        String provider = selectedProvider();
+        String key = SecureSettings.getApiKey(this, provider);
+        AudioTranscriber.transcribe(provider, key, file, (transcript, error) -> {
+            if (token != generation || sensitiveField) return;
+            processingAudio = false;
+            if (mic != null) mic.setEnabled(true);
+            if (improve != null) improve.setEnabled(true);
+            if (error != null) {
+                if (insert != null) insert.setEnabled(false);
+                if (status != null) status.setText("Speech unavailable: " + error
+                        + " Tap Mic to record again.");
+                return;
+            }
+            if (preview != null) {
+                preview.setText(transcript);
+                preview.setSelection(preview.length());
+            }
+            if (status != null) status.setText("Speech recognised. Converting to English…");
+            translate();
+        });
+    }
+
+    private String selectedProvider() {
+        return getSharedPreferences("voice_keyboard_settings", Context.MODE_PRIVATE)
+                .getString("selected_provider", "openai");
+    }
+
+    private void discardRecording() {
+        handler.removeCallbacks(stopAtLimit);
+        recording = false;
+        MediaRecorder current = recorder;
+        recorder = null;
+        if (current != null) {
+            try { current.stop(); } catch (Exception ignored) { }
+            try { current.release(); } catch (Exception ignored) { }
+        }
+        if (recordingFile != null) recordingFile.delete();
+        recordingFile = null;
+        if (mic != null) mic.setText("Mic");
     }
 
     private void translate() {
-        if (sensitiveField || preview == null) return;
+        if (sensitiveField || preview == null || recording || processingAudio) return;
         String original = preview.getText().toString().trim();
         if (original.isEmpty()) {
             status.setText("Speak or type a message first.");
@@ -213,12 +296,14 @@ public class VoiceKeyboardService extends InputMethodService {
         int token = ++generation;
         translating = true;
         if (improve != null) improve.setEnabled(false);
+        if (mic != null) mic.setEnabled(false);
         if (insert != null) insert.setEnabled(false);
         status.setText("Converting to natural English…");
         OpenAiEnglish.Callback callback = (result, error) -> {
             if (token != generation || sensitiveField || preview == null) return;
             translating = false;
             if (improve != null) improve.setEnabled(true);
+            if (mic != null) mic.setEnabled(true);
             if (insert != null) insert.setEnabled(true);
             if (error != null) {
                 status.setText("AI unavailable: " + error + ". Original text retained.");
@@ -236,7 +321,7 @@ public class VoiceKeyboardService extends InputMethodService {
     }
 
     private void insertText() {
-        if (sensitiveField || preview == null || translating) return;
+        if (sensitiveField || preview == null || translating || processingAudio || recording) return;
         String value = preview.getText().toString().trim();
         if (value.isEmpty()) return;
         InputConnection connection = getCurrentInputConnection();
@@ -274,21 +359,13 @@ public class VoiceKeyboardService extends InputMethodService {
         if (status != null) status.setText("Deleted from chat input. Clear Draft only clears the preview.");
     }
 
-    private void stopListening() {
-        listening = false;
-        if (recognizer != null) {
-            try { recognizer.cancel(); recognizer.destroy(); } catch (Exception ignored) { }
-            recognizer = null;
-        }
-    }
-
     @Override public void onFinishInputView(boolean finishingInput) {
         super.onFinishInputView(finishingInput);
-        stopListening();
+        discardRecording();
     }
 
     @Override public void onDestroy() {
-        stopListening();
+        discardRecording();
         super.onDestroy();
     }
 }
