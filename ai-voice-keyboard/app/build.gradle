@@ -6,11 +6,32 @@ android {
         applicationId 'com.airnovation.aivoicekeyboard'
         minSdk 26
         targetSdk 35
-        versionCode 7
-        versionName '0.7-prototype'
+        versionCode 8
+        versionName '0.8-prototype'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // Stable signing is optional; configure GitHub Actions secrets before relying on
+    // install-over updates. A newly generated signing identity cannot update
+    // any already-installed APK signed with a different debug certificate.
+    signingConfigs {
+        if (System.getenv("AE_SIGNING_FILE")) {
+            stableTest {
+                storeFile file(System.getenv("AE_SIGNING_FILE"))
+                storePassword System.getenv("AE_STORE_PASSWORD")
+                keyAlias System.getenv("AE_KEY_ALIAS")
+                keyPassword System.getenv("AE_KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            if (System.getenv("AE_SIGNING_FILE")) {
+                signingConfig signingConfigs.stableTest
+            }
+        }
     }
 }
