@@ -61,19 +61,19 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish v0.9 test download
+      - name: Publish v0.10 test download
         # Keep the normal Actions artifact even if release publishing is unavailable.
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          TAG=ai-voice-keyboard-v0.9-test
+          TAG=ai-voice-keyboard-v0.10-test
           APK=ai-voice-keyboard/app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
-          cp "$APK" AI-Voice-Keyboard-v0.9-test.apk
+          cp "$APK" AI-Voice-Keyboard-v0.10-test.apk
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --target "$GITHUB_SHA" --title "AI Voice Keyboard v0.9 (TEST)" --notes "Compact voice/EN translation keyboard with casual WhatsApp English style; use existing phone keyboard for typing. Does not send messages. Review results in WhatsApp. Test build; not production signed. Android may require uninstalling the prior debug build if its signing certificate differs. Back up your API key before uninstalling." --prerelease
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "AI Voice Keyboard v0.10 (TEST)" --notes "Compact voice/EN translation keyboard with natural WhatsApp English, safe Undo and return-to-previous-keyboard button. Does not send messages. Review results in WhatsApp. Test build; not production signed. Android may require uninstalling the prior debug build if its signing certificate differs. Back up your API key before uninstalling." --prerelease
           fi
-          gh release upload "$TAG" AI-Voice-Keyboard-v0.9-test.apk --clobber
-          echo "Direct test download: https://github.com/${GH_REPO}/releases/download/${TAG}/AI-Voice-Keyboard-v0.9-test.apk"
+          gh release upload "$TAG" AI-Voice-Keyboard-v0.10-test.apk --clobber
+          echo "Direct test download: https://github.com/${GH_REPO}/releases/download/${TAG}/AI-Voice-Keyboard-v0.10-test.apk"
