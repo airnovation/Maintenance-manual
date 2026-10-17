@@ -16,6 +16,8 @@ import android.text.InputType;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.ExtractedText;
+import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -56,7 +58,7 @@ public class VoiceKeyboardService extends InputMethodService {
         status = new TextView(this);
         status.setTextSize(15);
         status.setTextColor(0xff202020);
-        status.setText("Tap Mic to record, tap Stop to finish. AI translates after recording.");
+        status.setText("Mic / Stop: speak. EN: translate a typed chat draft.");
         root.addView(status);
 
         // Keep every action above the preview, away from the phone's bottom navigation bar.
@@ -65,8 +67,9 @@ public class VoiceKeyboardService extends InputMethodService {
         root.addView(row);
 
         mic = makeButton(row, "Mic", () -> toggleRecording());
-        improve = makeButton(row, "AI English", () -> translate());
+        improve = makeButton(row, "EN", () -> translate());
         insert = makeButton(row, "Insert", () -> insertText());
+        insert.setVisibility(View.GONE); // Emergency fallback only when auto-insert fails.
 
         LinearLayout other = new LinearLayout(this);
         other.setOrientation(LinearLayout.HORIZONTAL);
@@ -92,7 +95,7 @@ public class VoiceKeyboardService extends InputMethodService {
         preview.setSingleLine(false);
         preview.setMinLines(2);
         preview.setMaxLines(3);
-        preview.setHint("Recognised speech / English preview");
+        preview.setHint("Speech transcription / insertion fallback");
         preview.setBackgroundColor(Color.WHITE);
         preview.setTextColor(Color.BLACK);
         preview.setHintTextColor(0xff666666);
@@ -121,6 +124,7 @@ public class VoiceKeyboardService extends InputMethodService {
         translating = false;
         sensitiveField = isSensitive(attribute);
         if (preview != null) preview.setText("");
+        if (insert != null) insert.setVisibility(View.GONE);
         applySensitiveState();
     }
 
@@ -149,7 +153,7 @@ public class VoiceKeyboardService extends InputMethodService {
         if (preview != null) preview.setEnabled(!sensitiveField);
         if (status != null) status.setText(sensitiveField
                 ? "Sensitive field: voice & AI disabled. Switch to a trusted keyboard."
-                : "Tap Mic to record; tap Stop to finish; review English before Insert.");
+                : "Mic / Stop: translate speech automatically. EN: translate typed chat text.");
     }
 
     /**
@@ -193,6 +197,7 @@ public class VoiceKeyboardService extends InputMethodService {
             generation++;
             // Every new Mic session starts a fresh message; no need to press Clear.
             if (preview != null) preview.setText("");
+            if (insert != null) insert.setVisibility(View.GONE);
             mic.setText("Stop");
             improve.setEnabled(false);
             insert.setEnabled(false);
@@ -280,27 +285,36 @@ public class VoiceKeyboardService extends InputMethodService {
         if (mic != null) mic.setText("Mic");
     }
 
+
+    /**
+     * Voice: transcribe then translate and insert directly into the host chat draft.
+     * Text: tap EN with a draft already typed in the host chat field, then replace
+     * that draft with the translated English. Never press the host Send button.
+     */
     private void translate() {
-        if (sensitiveField || preview == null || recording || processingAudio) return;
-        String original = preview.getText().toString().trim();
+        if (sensitiveField || preview == null || recording || processingAudio || translating) return;
+        final String speechDraft = preview.getText().toString().trim();
+        final boolean fromTypedChat = speechDraft.isEmpty();
+        final String originalChat = fromTypedChat ? readChatDraft() : "";
+        final String original = fromTypedChat ? originalChat.trim() : speechDraft;
         if (original.isEmpty()) {
-            status.setText("Speak or type a message first.");
+            status.setText("Speak using Mic, or type in the chat with your normal keyboard and tap EN.");
             return;
         }
-        String provider = getSharedPreferences("voice_keyboard_settings", Context.MODE_PRIVATE)
-                .getString("selected_provider", "openai");
+        String provider = selectedProvider();
         String key = SecureSettings.getApiKey(this, provider);
         if (key.isEmpty()) {
             status.setText("Save your " + ("gemini".equals(provider) ? "Gemini" : "OpenAI")
-                    + " API key in the AI Voice Keyboard app first.");
+                    + " API key in app settings first.");
             return;
         }
+
         int token = ++generation;
         translating = true;
         if (improve != null) improve.setEnabled(false);
         if (mic != null) mic.setEnabled(false);
-        if (insert != null) insert.setEnabled(false);
-        status.setText("Converting to natural English…");
+        if (insert != null) { insert.setEnabled(false); insert.setVisibility(View.GONE); }
+        status.setText("Translating to English…");
         OpenAiEnglish.Callback callback = (result, error) -> {
             if (token != generation || sensitiveField || preview == null) return;
             translating = false;
@@ -308,17 +322,69 @@ public class VoiceKeyboardService extends InputMethodService {
             if (mic != null) mic.setEnabled(true);
             if (insert != null) insert.setEnabled(true);
             if (error != null) {
-                status.setText("AI unavailable: " + error + ". Original text retained.");
+                // Speech transcript is retained for a retry; the typed chat is never modified on failure.
+                status.setText("Translation failed: " + error + ". Original text retained; tap EN to retry.");
                 return;
             }
-            preview.setText(result);
-            preview.setSelection(preview.length());
-            status.setText("Review/edit English, then tap Insert.");
+            if (result == null || result.trim().isEmpty()) {
+                status.setText("Translation returned no text. Original retained.");
+                return;
+            }
+            String english = result.trim();
+            boolean inserted = false;
+            if (fromTypedChat) {
+                // Never overwrite typing that changed while the API request was running.
+                if (originalChat.equals(readChatDraft())) {
+                    InputConnection connection = getCurrentInputConnection();
+                    if (connection != null) {
+                        connection.beginBatchEdit();
+                        try {
+                            if (connection.setSelection(0, originalChat.length())) {
+                                inserted = connection.commitText(english, 1);
+                            }
+                        } finally {
+                            connection.endBatchEdit();
+                        }
+                    }
+                } else {
+                    status.setText("Chat text changed while translating. English is in preview; review before Insert.");
+                }
+            } else {
+                InputConnection connection = getCurrentInputConnection();
+                if (connection != null) inserted = connection.commitText(english, 1);
+            }
+            if (inserted) {
+                generation++;
+                preview.setText("");
+                if (insert != null) insert.setVisibility(View.GONE);
+                status.setText("English inserted into chat. Review it, then tap Send yourself.");
+            } else {
+                preview.setText(english);
+                preview.setSelection(preview.length());
+                if (insert != null) insert.setVisibility(View.VISIBLE);
+                if (status != null && !status.getText().toString().startsWith("Chat text changed")) {
+                    status.setText("Could not insert automatically. Review English and tap Insert.");
+                }
+            }
         };
         if ("gemini".equals(provider)) {
-            GeminiEnglish.rewrite(key, original, (result, error) -> callback.done(result, error));
+            GeminiEnglish.rewrite(key, original, callback::done);
         } else {
             OpenAiEnglish.rewrite(key, original, callback);
+        }
+    }
+
+    private String readChatDraft() {
+        InputConnection connection = getCurrentInputConnection();
+        if (connection == null) return "";
+        try {
+            ExtractedTextRequest request = new ExtractedTextRequest();
+            ExtractedText extracted = connection.getExtractedText(request, 0);
+            // Never replace a partial extraction, or text belonging to another field.
+            if (extracted == null || extracted.text == null || extracted.startOffset != 0) return "";
+            return extracted.text.toString();
+        } catch (Exception e) {
+            return "";
         }
     }
 
@@ -331,10 +397,14 @@ public class VoiceKeyboardService extends InputMethodService {
             status.setText("Tap a message input box first.");
             return;
         }
-        connection.commitText(value, 1);
-        generation++;
-        preview.setText("");
-        status.setText("Inserted. Press Send in the app when ready.");
+        if (connection.commitText(value, 1)) {
+            generation++;
+            preview.setText("");
+            if (insert != null) insert.setVisibility(View.GONE);
+            status.setText("Inserted into chat. Review before sending.");
+        } else {
+            status.setText("Insert failed. Tap the message input box and retry.");
+        }
     }
 
     /**
