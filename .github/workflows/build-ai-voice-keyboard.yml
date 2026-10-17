@@ -32,7 +32,26 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - name: Build unsigned-for-release, signed-for-debug APK
+      - name: Configure optional stable test signing
+        env:
+          AE_KEYSTORE_BASE64: ${{ secrets.AE_KEYSTORE_BASE64 }}
+          AE_STORE_PASSWORD: ${{ secrets.AE_STORE_PASSWORD }}
+          AE_KEY_ALIAS: ${{ secrets.AE_KEY_ALIAS }}
+          AE_KEY_PASSWORD: ${{ secrets.AE_KEY_PASSWORD }}
+        run: |
+          if [ -n "$AE_KEYSTORE_BASE64" ] && [ -n "$AE_STORE_PASSWORD" ] && [ -n "$AE_KEY_ALIAS" ] && [ -n "$AE_KEY_PASSWORD" ]; then
+            printf '%s' "$AE_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ai-voice-signing.jks"
+            chmod 600 "$RUNNER_TEMP/ai-voice-signing.jks"
+            echo "AE_SIGNING_FILE=$RUNNER_TEMP/ai-voice-signing.jks" >> "$GITHUB_ENV"
+            echo "Stable test signing supplied."
+          else
+            echo "::warning::Stable signing secrets are not configured. This debug APK likely cannot overwrite a previous runner-signed build."
+          fi
+      - name: Build APK (optional stable signing)
+        env:
+          AE_STORE_PASSWORD: ${{ secrets.AE_STORE_PASSWORD }}
+          AE_KEY_ALIAS: ${{ secrets.AE_KEY_ALIAS }}
+          AE_KEY_PASSWORD: ${{ secrets.AE_KEY_PASSWORD }}
         run: gradle -p ai-voice-keyboard :app:assembleDebug --no-daemon --stacktrace
       - name: Upload installable debug APK
         uses: actions/upload-artifact@v4
@@ -42,19 +61,19 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish v0.7 test download
+      - name: Publish v0.8 test download
         # Keep the normal Actions artifact even if release publishing is unavailable.
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          TAG=ai-voice-keyboard-v0.7-test
+          TAG=ai-voice-keyboard-v0.8-test
           APK=ai-voice-keyboard/app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
-          cp "$APK" AI-Voice-Keyboard-v0.7-test.apk
+          cp "$APK" AI-Voice-Keyboard-v0.8-test.apk
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --target "$GITHUB_SHA" --title "AI Voice Keyboard v0.7 (TEST)" --notes "Experimental typed chat translation and automatic insertion of voice translations; never sends chats. Review results in WhatsApp. Test build; not production signed. Android may require uninstalling the prior debug build if its signing certificate differs. Back up your API key before uninstalling." --prerelease
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "AI Voice Keyboard v0.8 (TEST)" --notes "Experimental offline Pinyin input, selectable Chinese candidates, EN translation and voice auto insertion. Does not send messages. Review results in WhatsApp. Test build; not production signed. Android may require uninstalling the prior debug build if its signing certificate differs. Back up your API key before uninstalling." --prerelease
           fi
-          gh release upload "$TAG" AI-Voice-Keyboard-v0.7-test.apk --clobber
-          echo "Direct test download: https://github.com/${GH_REPO}/releases/download/${TAG}/AI-Voice-Keyboard-v0.7-test.apk"
+          gh release upload "$TAG" AI-Voice-Keyboard-v0.8-test.apk --clobber
+          echo "Direct test download: https://github.com/${GH_REPO}/releases/download/${TAG}/AI-Voice-Keyboard-v0.8-test.apk"
