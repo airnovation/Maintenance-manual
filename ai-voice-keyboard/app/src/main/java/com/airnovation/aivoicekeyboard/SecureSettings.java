@@ -19,12 +19,19 @@ public final class SecureSettings {
     private static final String STORE = "voice_keyboard_settings";
     private static final String KEY_ALIAS = "voice_keyboard_key_v1";
     private static final String SECRET = "openai_key";
+    private static String secretName(String provider) {
+        return "gemini".equals(provider) ? "gemini_key" : SECRET;
+    }
     private SecureSettings() {}
 
     public static void saveApiKey(Context context, String value) throws Exception {
+        saveApiKey(context, value, "openai");
+    }
+
+    public static void saveApiKey(Context context, String value, String provider) throws Exception {
         String sanitized = value.trim();
         if (sanitized.isEmpty()) {
-            context.getSharedPreferences(STORE, Context.MODE_PRIVATE).edit().remove(SECRET).apply();
+            context.getSharedPreferences(STORE, Context.MODE_PRIVATE).edit().remove(secretName(provider)).apply();
             return;
         }
         byte[] iv = new byte[12];
@@ -34,12 +41,16 @@ public final class SecureSettings {
         byte[] ciphertext = cipher.doFinal(sanitized.getBytes(StandardCharsets.UTF_8));
         String encrypted = Base64.encodeToString(iv, Base64.NO_WRAP) + ":" +
                 Base64.encodeToString(ciphertext, Base64.NO_WRAP);
-        context.getSharedPreferences(STORE, Context.MODE_PRIVATE).edit().putString(SECRET, encrypted).apply();
+        context.getSharedPreferences(STORE, Context.MODE_PRIVATE).edit().putString(secretName(provider), encrypted).apply();
     }
 
     public static String getApiKey(Context context) {
+        return getApiKey(context, "openai");
+    }
+
+    public static String getApiKey(Context context, String provider) {
         SharedPreferences prefs = context.getSharedPreferences(STORE, Context.MODE_PRIVATE);
-        String stored = prefs.getString(SECRET, "");
+        String stored = prefs.getString(secretName(provider), "");
         if (stored == null || stored.isEmpty()) return "";
         try {
             String[] parts = stored.split(":", 2);
