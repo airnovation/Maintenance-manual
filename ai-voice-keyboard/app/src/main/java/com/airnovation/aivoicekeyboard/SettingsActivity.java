@@ -8,6 +8,9 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.text.InputType;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -30,7 +33,7 @@ public class SettingsActivity extends Activity {
         layout.addView(title);
 
         TextView details = new TextView(this);
-        details.setText("\n1. Allow microphone access.\n2. Enable the keyboard in Android Settings.\n3. Select AI Voice Keyboard as your input method.\n4. Open WhatsApp, Gmail or any text box.\n\nSpeech recognition uses your device's speech service. AI translation sends only the preview text to OpenAI when you tap AI English. This keyboard never sends a message for you.\n");
+        details.setText("\n1. Allow microphone access.\n2. Enable the keyboard in Android Settings.\n3. Select AI Voice Keyboard as your input method.\n4. Open WhatsApp, Gmail or any text box.\n\nSpeech recognition uses your device's speech service. AI translation sends only the preview text to your selected provider (OpenAI or Gemini) when you tap AI English. This keyboard never sends a message for you.\n");
         layout.addView(details);
 
         Button permission = new Button(this);
@@ -57,14 +60,35 @@ public class SettingsActivity extends Activity {
         });
         layout.addView(select);
 
+        TextView providerLabel = new TextView(this);
+        providerLabel.setText("AI Provider (select now or later)");
+        layout.addView(providerLabel);
+
+        Spinner provider = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"OpenAI (ChatGPT API)", "Google Gemini API"});
+        provider.setAdapter(adapter);
+        String savedProvider = getSharedPreferences("voice_keyboard_settings", MODE_PRIVATE)
+                .getString("selected_provider", "openai");
+        provider.setSelection("gemini".equals(savedProvider) ? 1 : 0);
+        layout.addView(provider);
+        provider.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                getSharedPreferences("voice_keyboard_settings", MODE_PRIVATE).edit()
+                        .putString("selected_provider", position == 1 ? "gemini" : "openai").apply();
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+
         EditText key = new EditText(this);
         key.setSingleLine(true);
-        key.setHint("OpenAI API key (optional until AI translation)");
+        key.setHint("API key for selected provider (optional)");
         key.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         layout.addView(key);
 
         TextView keyInfo = new TextView(this);
-        keyInfo.setText("\nAPI key is encrypted locally using Android Keystore. Never paste it in GitHub or WhatsApp. OpenAI API usage is billed separately from ChatGPT subscriptions. Leave blank if you only want Chinese speech-to-text.\n");
+        keyInfo.setText("\nAPI key is encrypted locally using Android Keystore. Never paste it in GitHub or WhatsApp. OpenAI and Gemini require different keys. OpenAI API billing is separate from ChatGPT subscriptions. Leave blank if you only want Chinese speech-to-text.\n");
         layout.addView(keyInfo);
 
         Button save = new Button(this);
@@ -76,9 +100,10 @@ public class SettingsActivity extends Activity {
                 return;
             }
             try {
-                SecureSettings.saveApiKey(this, input);
+                SecureSettings.saveApiKey(this, input,
+                        provider.getSelectedItemPosition() == 1 ? "gemini" : "openai");
                 key.setText("");
-                Toast.makeText(this, "Saved securely", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Key for selected provider saved securely", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
                 Toast.makeText(this, "Could not save key", Toast.LENGTH_LONG).show();
             }
@@ -89,8 +114,9 @@ public class SettingsActivity extends Activity {
         remove.setText("Remove Saved API Key");
         remove.setOnClickListener(v -> {
             try {
-                SecureSettings.saveApiKey(this, "");
-                Toast.makeText(this, "Removed", Toast.LENGTH_SHORT).show();
+                SecureSettings.saveApiKey(this, "",
+                        provider.getSelectedItemPosition() == 1 ? "gemini" : "openai");
+                Toast.makeText(this, "Key for selected provider removed", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
                 Toast.makeText(this, "Could not remove key", Toast.LENGTH_LONG).show();
             }
