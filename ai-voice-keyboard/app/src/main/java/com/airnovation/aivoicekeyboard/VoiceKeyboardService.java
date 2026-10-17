@@ -23,8 +23,6 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.HorizontalScrollView;
-import java.util.List;
 
 /** Voice-first input method. No automatic messaging or background conversation reading. */
 public class VoiceKeyboardService extends InputMethodService {
@@ -33,12 +31,6 @@ public class VoiceKeyboardService extends InputMethodService {
     private Button mic;
     private Button improve;
     private Button insert;
-    private LinearLayout candidates;
-    private TextView pinyinDisplay;
-    private Button modeButton;
-    private final StringBuilder pinyinBuffer = new StringBuilder();
-    private PinyinDictionary dictionary;
-    private boolean latinMode = false;
     private MediaRecorder recorder;
     private File recordingFile;
     private long recordStarted;
@@ -66,7 +58,7 @@ public class VoiceKeyboardService extends InputMethodService {
         status = new TextView(this);
         status.setTextSize(15);
         status.setTextColor(0xff202020);
-        status.setText("Mic / Stop for voice; type Pinyin, choose Chinese, then tap EN.");
+        status.setText("Mic / Stop: voice. EN: translate text from your regular keyboard.");
         root.addView(status);
 
         // Keep every action above the preview, away from the phone's bottom navigation bar.
@@ -83,17 +75,6 @@ public class VoiceKeyboardService extends InputMethodService {
         other.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(other);
         makeButton(other, "⌫ Delete", () -> deleteFromChatInput());
-        makeButton(other, "Clear Draft", () -> {
-            discardRecording();
-            generation++;
-            processingAudio = false;
-            translating = false;
-            if (mic != null) { mic.setEnabled(true); mic.setText("Mic"); }
-            if (improve != null) improve.setEnabled(true);
-            if (insert != null) insert.setEnabled(true);
-            preview.setText("");
-            status.setText("Ready");
-        });
         makeButton(other, "Other Keyboard", () -> {
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             if (imm != null) imm.showInputMethodPicker();
@@ -111,29 +92,6 @@ public class VoiceKeyboardService extends InputMethodService {
         root.addView(preview, new LinearLayout.LayoutParams(-1, -2));
         preview.setVisibility(View.GONE);
 
-        if (dictionary == null) dictionary = new PinyinDictionary(this);
-        pinyinDisplay = new TextView(this);
-        pinyinDisplay.setTextSize(14);
-        pinyinDisplay.setTextColor(0xff282828);
-        pinyinDisplay.setText("拼音输入 | Select a Chinese candidate");
-        root.addView(pinyinDisplay);
-        HorizontalScrollView suggestionScroll = new HorizontalScrollView(this);
-        suggestionScroll.setHorizontalScrollBarEnabled(false);
-        candidates = new LinearLayout(this);
-        candidates.setOrientation(LinearLayout.HORIZONTAL);
-        suggestionScroll.addView(candidates);
-        root.addView(suggestionScroll);
-        addLetters(root, "qwertyuiop");
-        addLetters(root, "asdfghjkl");
-        addLetters(root, "zxcvbnm");
-        LinearLayout extra = new LinearLayout(this);
-        extra.setOrientation(LinearLayout.HORIZONTAL);
-        root.addView(extra);
-        modeButton = makeButton(extra, "中 / ABC", () -> toggleMode());
-        makeButton(extra, "，", () -> punctuation());
-        makeButton(extra, "Space", () -> spaceKey());
-        makeButton(extra, "⌫", () -> deleteFromChatInput());
-        renderCandidates();
         applySensitiveState();
         return root;
     }
@@ -150,124 +108,6 @@ public class VoiceKeyboardService extends InputMethodService {
     }
 
 
-    private void addLetters(LinearLayout root, String keys) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        root.addView(row);
-        for (int i = 0; i < keys.length(); i++) {
-            final char letter = keys.charAt(i);
-            Button b = makeButton(row, Character.toString(letter), () -> typeLetter(letter));
-            b.setTextSize(14);
-            b.setMinWidth(0);
-            b.setMinimumWidth(0);
-            b.setPadding(0, 0, 0, 0);
-        }
-    }
-
-    private void typeLetter(char letter) {
-        if (sensitiveField || processingAudio || translating || recording) return;
-        if (latinMode) {
-            InputConnection connection = getCurrentInputConnection();
-            if (connection != null) connection.commitText(String.valueOf(letter), 1);
-        } else {
-            if (pinyinBuffer.length() >= 48) {
-                if (status != null) status.setText("Please select a Chinese candidate before continuing.");
-                return;
-            }
-            pinyinBuffer.append(letter);
-            renderCandidates();
-        }
-    }
-
-    private void toggleMode() {
-        if (pinyinBuffer.length() > 0) {
-            if (status != null) status.setText("Select a Chinese candidate, or delete Pinyin before switching mode.");
-            return;
-        }
-        latinMode = !latinMode;
-        if (modeButton != null) modeButton.setText(latinMode ? "ABC / 中" : "中 / ABC");
-        renderCandidates();
-    }
-
-    private void punctuation() {
-        if (sensitiveField || processingAudio || translating || recording) return;
-        if (pinyinBuffer.length() > 0) {
-            List<PinyinDictionary.Candidate> list = dictionary.suggest(pinyinBuffer.toString(), 1);
-            if (list.isEmpty()) return;
-            chooseCandidate(list.get(0));
-        }
-        InputConnection connection = getCurrentInputConnection();
-        if (connection != null) connection.commitText(latinMode ? "," : "，", 1);
-    }
-
-    private void spaceKey() {
-        if (sensitiveField || processingAudio || translating || recording) return;
-        if (pinyinBuffer.length() > 0) {
-            List<PinyinDictionary.Candidate> list = dictionary.suggest(pinyinBuffer.toString(), 1);
-            if (list.isEmpty()) {
-                if (status != null) status.setText("No Chinese candidate. Delete Pinyin or switch to ABC.");
-                return;
-            }
-            chooseCandidate(list.get(0));
-            return;
-        }
-        InputConnection connection = getCurrentInputConnection();
-        if (connection != null) connection.commitText(" ", 1);
-    }
-
-    private void chooseCandidate(PinyinDictionary.Candidate choice) {
-        if (choice == null || sensitiveField || processingAudio || translating || recording) return;
-        InputConnection connection = getCurrentInputConnection();
-        if (connection == null) {
-            if (status != null) status.setText("Tap a chat input box first.");
-            return;
-        }
-        if (connection.commitText(choice.text, 1)) {
-            int amount = Math.min(choice.consumed, pinyinBuffer.length());
-            pinyinBuffer.delete(0, amount);
-            renderCandidates();
-            if (status != null) status.setText("Chinese inserted. Continue typing or tap EN for translation.");
-        } else if (status != null) {
-            status.setText("Cannot insert Chinese in this field.");
-        }
-    }
-
-    private void renderCandidates() {
-        if (candidates == null || pinyinDisplay == null) return;
-        candidates.removeAllViews();
-        if (sensitiveField) {
-            pinyinDisplay.setText("Sensitive input field: use your trusted keyboard.");
-            return;
-        }
-        if (latinMode) {
-            pinyinDisplay.setText("ABC mode | EN translates existing chat text");
-            return;
-        }
-        String typed = pinyinBuffer.toString();
-        pinyinDisplay.setText(typed.isEmpty()
-                ? "拼音输入 | Type Pinyin, tap a Chinese candidate"
-                : "拼音: " + typed);
-        if (dictionary == null || !dictionary.isReady()) {
-            pinyinDisplay.setText("Chinese dictionary unavailable. Switch to another keyboard.");
-            return;
-        }
-        if (typed.isEmpty()) return;
-        List<PinyinDictionary.Candidate> list = dictionary.suggest(typed, 15);
-        for (PinyinDictionary.Candidate choice : list) {
-            Button b = new Button(this);
-            b.setAllCaps(false);
-            b.setText(choice.text);
-            b.setTextSize(18);
-            b.setMinWidth(0);
-            b.setPadding(12, 0, 12, 0);
-            candidates.addView(b);
-            b.setOnClickListener(v -> chooseCandidate(choice));
-        }
-        if (list.isEmpty() && status != null) {
-            status.setText("No Pinyin match yet; finish the syllable or delete the last letters.");
-        }
-    }
-
     @Override public void onStartInput(EditorInfo attribute, boolean restarting) {
         super.onStartInput(attribute, restarting);
         generation++;
@@ -277,8 +117,7 @@ public class VoiceKeyboardService extends InputMethodService {
         sensitiveField = isSensitive(attribute);
         if (preview != null) preview.setText("");
         if (insert != null) insert.setVisibility(View.GONE);
-        pinyinBuffer.setLength(0);
-        renderCandidates();
+        if (preview != null) preview.setVisibility(View.GONE);
         applySensitiveState();
     }
 
@@ -305,7 +144,6 @@ public class VoiceKeyboardService extends InputMethodService {
         if (improve != null) improve.setEnabled(!sensitiveField && !processingAudio && !recording);
         if (insert != null) insert.setEnabled(!sensitiveField && !processingAudio && !translating && !recording);
         if (preview != null) preview.setEnabled(!sensitiveField);
-        renderCandidates();
         if (status != null) status.setText(sensitiveField
                 ? "Sensitive field: voice & AI disabled. Switch to a trusted keyboard."
                 : "Mic / Stop: translate speech automatically. EN: translate typed chat text.");
@@ -448,10 +286,6 @@ public class VoiceKeyboardService extends InputMethodService {
      */
     private void translate() {
         if (sensitiveField || preview == null || recording || processingAudio || translating) return;
-        if (pinyinBuffer.length() > 0) {
-            status.setText("Choose a Chinese candidate (or Space) before tapping EN.");
-            return;
-        }
         final String speechDraft = preview.getText().toString().trim();
         final boolean fromTypedChat = speechDraft.isEmpty();
         final String originalChat = fromTypedChat ? readChatDraft() : "";
@@ -516,10 +350,12 @@ public class VoiceKeyboardService extends InputMethodService {
                 generation++;
                 preview.setText("");
                 if (insert != null) insert.setVisibility(View.GONE);
+                preview.setVisibility(View.GONE);
                 status.setText("English inserted into chat. Review it, then tap Send yourself.");
             } else {
                 preview.setText(english);
                 preview.setSelection(preview.length());
+                preview.setVisibility(View.VISIBLE);
                 if (insert != null) insert.setVisibility(View.VISIBLE);
                 if (status != null && !status.getText().toString().startsWith("Chat text changed")) {
                     status.setText("Could not insert automatically. Review English and tap Insert.");
@@ -560,6 +396,7 @@ public class VoiceKeyboardService extends InputMethodService {
             generation++;
             preview.setText("");
             if (insert != null) insert.setVisibility(View.GONE);
+            preview.setVisibility(View.GONE);
             status.setText("Inserted into chat. Review before sending.");
         } else {
             status.setText("Insert failed. Tap the message input box and retry.");
@@ -571,11 +408,6 @@ public class VoiceKeyboardService extends InputMethodService {
      * One press removes selected text or the code point just before the cursor.
      */
     private void deleteFromChatInput() {
-        if (pinyinBuffer.length() > 0) {
-            pinyinBuffer.deleteCharAt(pinyinBuffer.length() - 1);
-            renderCandidates();
-            return;
-        }
         InputConnection connection = getCurrentInputConnection();
         if (connection == null) {
             if (status != null) status.setText("Tap the WhatsApp message box first.");
@@ -601,8 +433,6 @@ public class VoiceKeyboardService extends InputMethodService {
         discardRecording();
         processingAudio = false;
         translating = false;
-        pinyinBuffer.setLength(0);
-        renderCandidates();
     }
 
     @Override public void onDestroy() {
