@@ -59,7 +59,8 @@ public class VoiceKeyboardService extends InputMethodService {
         LinearLayout other = new LinearLayout(this);
         other.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(other);
-        makeButton(other, "Clear", () -> {
+        makeButton(other, "⌫ Delete", () -> deleteFromChatInput());
+        makeButton(other, "Clear Draft", () -> {
             generation++;
             translating = false;
             if (improve != null) improve.setEnabled(true);
@@ -247,6 +248,30 @@ public class VoiceKeyboardService extends InputMethodService {
         generation++;
         preview.setText("");
         status.setText("Inserted. Press Send in the app when ready.");
+    }
+
+    /**
+     * Deletes from the host app's active editor, NOT from our local preview.
+     * One press removes selected text or the code point just before the cursor.
+     */
+    private void deleteFromChatInput() {
+        InputConnection connection = getCurrentInputConnection();
+        if (connection == null) {
+            if (status != null) status.setText("Tap the WhatsApp message box first.");
+            return;
+        }
+        try {
+            CharSequence selected = connection.getSelectedText(0);
+            if (selected != null && selected.length() > 0) {
+                connection.commitText("", 1);
+            } else if (!connection.deleteSurroundingTextInCodePoints(1, 0)) {
+                // Some third-party input boxes don't implement deleteSurroundingTextInCodePoints.
+                sendDownUpKeyEvents(android.view.KeyEvent.KEYCODE_DEL);
+            }
+        } catch (Exception e) {
+            sendDownUpKeyEvents(android.view.KeyEvent.KEYCODE_DEL);
+        }
+        if (status != null) status.setText("Deleted from chat input. Clear Draft only clears the preview.");
     }
 
     private void stopListening() {
