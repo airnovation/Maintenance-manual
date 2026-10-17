@@ -38,7 +38,7 @@ public class SettingsActivity extends Activity {
         layout.addView(title);
 
         TextView details = new TextView(this);
-        details.setText("\n1. Allow microphone access.\n2. Enable the keyboard in Android Settings.\n3. Select AI Voice Keyboard as your input method.\n4. Open WhatsApp, Gmail or any text box.\n\nMic starts and Stop ends a recording. Audio is sent to your selected API provider for transcription and then English translation; a successful translation is inserted into the focused chat draft automatically. For typed text: enter your draft in the chat using your regular keyboard, switch to AI Voice Keyboard, then tap EN. EN translates and replaces the chat draft without sending it. Review before tapping Send yourself. Temporary recordings are deleted after processing.\n");
+        details.setText("\n1. Allow microphone access.\n2. Enable the keyboard in Android Settings.\n3. Select AI Voice Keyboard as your input method.\n4. Open WhatsApp, Gmail or any text box.\n\nMic starts and Stop ends a recording. Audio is sent to your selected API provider for transcription and then English translation; a successful translation is inserted into the focused chat draft automatically. For typed text: use the built-in Pinyin letter keys, tap a Chinese candidate to insert it into the chat, then tap EN to translate and replace the draft. The ABC toggle is available for technical terms. EN never sends messages. Review before tapping Send yourself. Temporary recordings are deleted after processing.\n");
         layout.addView(details);
 
         Button permission = new Button(this);
