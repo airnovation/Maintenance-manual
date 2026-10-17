@@ -2,6 +2,8 @@ package com.airnovation.aivoicekeyboard;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.inputmethodservice.InputMethodService;
@@ -30,28 +32,22 @@ public class VoiceKeyboardService extends InputMethodService {
     private boolean sensitiveField = false;
     private boolean listening = false;
     private int generation = 0;
+    private boolean translating = false;
 
     @Override public View onCreateInputView() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(12, 12, 12, 12);
+        int pad = (int) (getResources().getDisplayMetrics().density * 12);
+        root.setPadding(pad, pad, pad, pad * 2);
         root.setBackgroundColor(0xfff1f2f4);
 
         status = new TextView(this);
         status.setTextSize(15);
         status.setTextColor(0xff202020);
-        status.setText("Speak Chinese, then tap AI English");
+        status.setText("Mic → English (if API is set) → Review → Insert");
         root.addView(status);
 
-        preview = new EditText(this);
-        preview.setTextSize(16);
-        preview.setSingleLine(false);
-        preview.setMinLines(2);
-        preview.setMaxLines(5);
-        preview.setHint("Speech transcript and editable English preview");
-        preview.setBackgroundColor(0xffffffff);
-        root.addView(preview, new LinearLayout.LayoutParams(-1, -2));
-
+        // Keep every action above the preview, away from the phone's bottom navigation bar.
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(row);
@@ -65,6 +61,9 @@ public class VoiceKeyboardService extends InputMethodService {
         root.addView(other);
         makeButton(other, "Clear", () -> {
             generation++;
+            translating = false;
+            if (improve != null) improve.setEnabled(true);
+            if (insert != null) insert.setEnabled(true);
             preview.setText("");
             status.setText("Ready");
         });
@@ -72,6 +71,17 @@ public class VoiceKeyboardService extends InputMethodService {
             InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             if (imm != null) imm.showInputMethodPicker();
         });
+        preview = new EditText(this);
+        preview.setTextSize(16);
+        preview.setSingleLine(false);
+        preview.setMinLines(2);
+        preview.setMaxLines(3);
+        preview.setHint("Recognised speech / English preview");
+        preview.setBackgroundColor(Color.WHITE);
+        preview.setTextColor(Color.BLACK);
+        preview.setHintTextColor(0xff666666);
+        preview.setPadding(pad, pad, pad, pad);
+        root.addView(preview, new LinearLayout.LayoutParams(-1, -2));
         applySensitiveState();
         return root;
     }
@@ -79,6 +89,9 @@ public class VoiceKeyboardService extends InputMethodService {
     private Button makeButton(LinearLayout row, String title, Runnable click) {
         Button b = new Button(this);
         b.setText(title);
+        b.setAllCaps(false);
+        b.setTextColor(0xff111111);
+        b.setBackgroundTintList(ColorStateList.valueOf(0xffd7e2ef));
         row.addView(b, new LinearLayout.LayoutParams(0, -2, 1f));
         b.setOnClickListener(v -> click.run());
         return b;
@@ -114,11 +127,11 @@ public class VoiceKeyboardService extends InputMethodService {
     private void applySensitiveState() {
         if (mic != null) mic.setEnabled(!sensitiveField);
         if (improve != null) improve.setEnabled(!sensitiveField);
-        if (insert != null) insert.setEnabled(!sensitiveField);
+        if (insert != null) insert.setEnabled(!sensitiveField && !translating);
         if (preview != null) preview.setEnabled(!sensitiveField);
         if (status != null) status.setText(sensitiveField
                 ? "Sensitive field: voice & AI disabled. Switch to a trusted keyboard."
-                : "Speak Chinese, then tap AI English");
+                : "Mic → English (if API is set) → Review → Insert");
     }
 
     private void startSpeech() {
@@ -131,6 +144,7 @@ public class VoiceKeyboardService extends InputMethodService {
             status.setText("No Android speech recognition service available on this device.");
             return;
         }
+        generation++;
         stopListening();
         try {
             recognizer = SpeechRecognizer.createSpeechRecognizer(this);
@@ -142,7 +156,9 @@ public class VoiceKeyboardService extends InputMethodService {
                 @Override public void onEndOfSpeech() { if (status != null) status.setText("Recognizing…"); }
                 @Override public void onError(int error) {
                     listening = false;
-                    if (status != null) status.setText("Speech error (" + error + "). Try again.");
+                    if (status != null) status.setText(error == SpeechRecognizer.ERROR_NO_MATCH
+                            ? "No speech recognised. Tap Mic once and start talking when Listening appears."
+                            : "Speech error (" + error + "). Try again.");
                 }
                 @Override public void onResults(Bundle results) {
                     listening = false;
@@ -154,7 +170,14 @@ public class VoiceKeyboardService extends InputMethodService {
                     String existing = preview.getText().toString().trim();
                     preview.setText(existing.isEmpty() ? found.get(0) : existing + " " + found.get(0));
                     preview.setSelection(preview.length());
-                    if (status != null) status.setText("Transcript ready. Tap AI English.");
+                    if (status != null) status.setText("Transcript ready. Checking AI configuration…");
+                    String provider = getSharedPreferences("voice_keyboard_settings", Context.MODE_PRIVATE)
+                            .getString("selected_provider", "openai");
+                    if (SecureSettings.getApiKey(VoiceKeyboardService.this, provider).isEmpty()) {
+                        status.setText("Chinese transcript ready. Add an API key for automatic English.");
+                    } else {
+                        translate();
+                    }
                 }
                 @Override public void onPartialResults(Bundle results) { }
                 @Override public void onEvent(int eventType, Bundle params) { }
@@ -187,11 +210,15 @@ public class VoiceKeyboardService extends InputMethodService {
             return;
         }
         int token = ++generation;
+        translating = true;
         if (improve != null) improve.setEnabled(false);
+        if (insert != null) insert.setEnabled(false);
         status.setText("Converting to natural English…");
         OpenAiEnglish.Callback callback = (result, error) -> {
             if (token != generation || sensitiveField || preview == null) return;
+            translating = false;
             if (improve != null) improve.setEnabled(true);
+            if (insert != null) insert.setEnabled(true);
             if (error != null) {
                 status.setText("AI unavailable: " + error + ". Original text retained.");
                 return;
@@ -208,7 +235,7 @@ public class VoiceKeyboardService extends InputMethodService {
     }
 
     private void insertText() {
-        if (sensitiveField || preview == null) return;
+        if (sensitiveField || preview == null || translating) return;
         String value = preview.getText().toString().trim();
         if (value.isEmpty()) return;
         InputConnection connection = getCurrentInputConnection();
