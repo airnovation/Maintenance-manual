@@ -178,15 +178,18 @@ public class VoiceKeyboardService extends InputMethodService {
             status.setText("Speak or type a message first.");
             return;
         }
-        String key = SecureSettings.getApiKey(this);
+        String provider = getSharedPreferences("voice_keyboard_settings", Context.MODE_PRIVATE)
+                .getString("selected_provider", "openai");
+        String key = SecureSettings.getApiKey(this, provider);
         if (key.isEmpty()) {
-            status.setText("Save your OpenAI API key in the AI Voice Keyboard app first.");
+            status.setText("Save your " + ("gemini".equals(provider) ? "Gemini" : "OpenAI")
+                    + " API key in the AI Voice Keyboard app first.");
             return;
         }
         int token = ++generation;
         if (improve != null) improve.setEnabled(false);
         status.setText("Converting to natural English…");
-        OpenAiEnglish.rewrite(key, original, (result, error) -> {
+        OpenAiEnglish.Callback callback = (result, error) -> {
             if (token != generation || sensitiveField || preview == null) return;
             if (improve != null) improve.setEnabled(true);
             if (error != null) {
@@ -196,7 +199,12 @@ public class VoiceKeyboardService extends InputMethodService {
             preview.setText(result);
             preview.setSelection(preview.length());
             status.setText("Review/edit English, then tap Insert.");
-        });
+        };
+        if ("gemini".equals(provider)) {
+            GeminiEnglish.rewrite(key, original, (result, error) -> callback.done(result, error));
+        } else {
+            OpenAiEnglish.rewrite(key, original, callback);
+        }
     }
 
     private void insertText() {
