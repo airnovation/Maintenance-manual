@@ -269,6 +269,7 @@ public final class VisibleMessageServiceTest {
         }
     }
     private static void assertOnlyMessageRead(AccessibilityNodeInfo node, AccessibilityNodeInfo message) {
+        if (node==null) return;
         check(node.textCalls==(node==message ? 1 : 0), "Only the allowed message may be read: "+node.resourceId);
         for (AccessibilityNodeInfo child:node.children) assertOnlyMessageRead(child,message);
     }
@@ -511,10 +512,187 @@ public final class VisibleMessageServiceTest {
         // misreported as a generic leaf View is outside this fixture's knowledge.
         // Passing these host tests is not proof of pixel-level visibility.
     }
+    private static void localReviewSessionContract() {
+        AssistantSession s=new AssistantSession(); long token=s.start();
+        check(s.beginReview(token),"Explicit review enters local-only mode");
+        check(s.reviewMode(token) && !s.mayUseProvider(token) && s.visible(token).isEmpty(),"Pending review cannot establish provider context");
+        check(!s.accept(token,"unapproved response","unapproved draft"),"Pending review rejects provider callbacks");
+        check(s.captureReview(token,BUSINESS,"synthetic-window",true,true,Arrays.asList("Candidate A","Candidate B")),"Local capture stores review candidates");
+        check(s.reviewCandidates(token).equals(Arrays.asList("Candidate A","Candidate B")),"RAM candidates available for local UI");
+        boolean immutable=false;
+        try { s.reviewCandidates(token).add("extra"); } catch (UnsupportedOperationException expected) { immutable=true; }
+        check(immutable,"Review candidates are immutable");
+        java.util.List<java.util.List<String>> invalid=new java.util.ArrayList<>();
+        invalid.add(null); invalid.add(java.util.Collections.emptyList()); invalid.add(Arrays.asList(""));
+        invalid.add(Arrays.asList(" \n ")); invalid.add(Arrays.asList((String)null));
+        invalid.add(Arrays.asList("x".repeat(3001))); invalid.add(Arrays.asList("x".repeat(2000),"y".repeat(1001)));
+        invalid.add(java.util.Collections.nCopies(13,"x")); invalid.add(Arrays.asList("valid"," "));
+        for (java.util.List<String> values:invalid) {
+            check(!s.approveReview(token,values),"Invalid chosen edits must be rejected, never silently truncated");
+            check(s.visible(token).isEmpty() && !s.mayUseProvider(token),"Rejected approval leaves no provider context");
+            check(s.reviewCandidates(token).size()==2,"Rejected edits retain local candidates for correction");
+        }
+        java.util.ArrayList<String> chosen=new java.util.ArrayList<>(Arrays.asList("  User edited B only  "));
+        check(s.approveReview(token,chosen),"Explicit valid selected edits approved"); chosen.set(0,"mutated after approval");
+        check(s.visible(token).equals(Arrays.asList("  User edited B only  ")),"Only exact copied selected edits enter provider context");
+        check(s.mayUseProvider(token) && s.reviewMode(token),"Approved review permits provider while retaining review revalidation mode");
+        check(s.reviewCandidates(token).isEmpty(),"Approval releases unselected candidate storage");
+        check(!s.capture(token,BUSINESS,"synthetic-window",true,true,Arrays.asList("overwrite")),"Legacy capture cannot overwrite approved review");
+        check(!s.captureReview(token,BUSINESS,"synthetic-window",true,true,Arrays.asList("overwrite")),"Review capture cannot overwrite approved review");
+        check(!s.approveReview(token,Arrays.asList("second approval")),"Approval is a single transition");
+        check(s.visible(token).equals(Arrays.asList("  User edited B only  ")),"Failed overwrite attempts preserve approved context");
+        check(s.accept(token,"approved response","approved draft"),"Approved callback may store response");
+        s.invalidate();
+        check(!s.mayUseProvider(token) && s.reviewCandidates(token).isEmpty() && s.visible(token).isEmpty(),"Cancel wipes both review and approved context");
+        check(s.explanation().isEmpty() && s.draft().isEmpty(),"Cancel wipes responses");
+        long next=s.start(); check(!s.approveReview(token,Arrays.asList("stale")),"Old review token cannot approve a new session");
+        check(s.beginReview(next) && s.captureReview(next,BUSINESS,"window",true,true,Arrays.asList("x".repeat(4000),"unused")),"Capture can bound local candidate text");
+        check(s.reviewCandidates(next).size()==1 && s.reviewCandidates(next).get(0).length()==3000,"Captured preview bounded to 3000 characters");
+        check(s.approveReview(next,Arrays.asList("y".repeat(3000))),"Exactly 3000 chosen characters accepted intact");
+        check(s.visible(next).get(0).length()==3000,"Valid limit edit never truncated");
+        s.invalidate(); scenarios++;
+    }
+    private static long startLocalReview(Fixture f) {
+        long token=AssistantSession.INSTANCE.start(); f.message.allowText=true;
+        String result=VisibleMessageService.captureForReview(token);
+        check(result==null,"Actual service local review capture must succeed: "+result);
+        f.message.allowText=false;
+        check(AssistantSession.INSTANCE.reviewMode(token),"Actual capture enters review mode");
+        check(!AssistantSession.INSTANCE.mayUseProvider(token) && AssistantSession.INSTANCE.visible(token).isEmpty(),"Actual local capture exposes no provider context");
+        check(AssistantSession.INSTANCE.reviewCandidates(token).equals(Arrays.asList("SYNTHETIC MESSAGE")),"Actual local capture retains only expected candidate");
+        assertOnlyMessageRead(f.root,f.message);
+        return token;
+    }
+    private static void localReviewOverlapsThenExplicitApproval() {
+        try (Fixture f=new Fixture()) {
+            f.root.children.add(node("synthetic_cover","android.view.SurfaceView",100,210,300,250));
+            long strict=AssistantSession.INSTANCE.start();
+            check(VisibleMessageService.captureOnce(strict)!=null,"Legacy strict capture still refuses reported covering surface");
+            assertNoTextReads(f.root);
+            long token=startLocalReview(f);
+            check(VisibleMessageService.reviewStillCurrent(token),"Pending local preview revalidates metadata only");
+            check(VisibleMessageService.stillCurrent(token),"General callback check routes review to metadata path");
+            check(AssistantSession.INSTANCE.visible(token).isEmpty(),"Revalidation cannot approve candidate context");
+            check(AssistantSession.INSTANCE.approveReview(token,Arrays.asList("Only this selected, edited sentence.")),"Explicit chosen text approved");
+            for (int i=0;i<3;i++) {
+                check(VisibleMessageService.reviewStillCurrent(token) && VisibleMessageService.stillCurrent(token),"Approved callbacks never reread message text");
+                check(AssistantSession.INSTANCE.visible(token).equals(Arrays.asList("Only this selected, edited sentence.")),"Revalidation never overwrites approved edits");
+            }
+            assertOnlyMessageRead(f.root,f.message);
+            check(AssistantSession.INSTANCE.mayUseProvider(token),"Only approved selected text is provider-eligible");
+            scenarios++;
+        }
+    }
+    private static void localReviewCaptureGate(int gate) {
+        try (Fixture f=new Fixture()) {
+            String label="review gate "+gate;
+            if (gate==0) f.message.bounds=new Rect(20,80,600,180);
+            if (gate==1) f.message.localBounds=new Rect(0,0,580,140);
+            if (gate==2) {
+                AccessibilityWindowInfo overlay=new AccessibilityWindowInfo(); overlay.id=8;
+                overlay.type=AccessibilityWindowInfo.TYPE_SYSTEM; overlay.layer=2; overlay.focused=false; overlay.active=false;
+                overlay.bounds=new Rect(100,210,300,250); f.service.fixtureWindows.add(overlay);
+            }
+            if (gate==3) f.message.password=true;
+            if (gate==4) f.message.editable=true;
+            if (gate==5) f.entry.focused=false;
+            if (gate==6) f.list.className="example.UnknownList";
+            if (gate==7) f.root.packageName="example.UnapprovedApp";
+            if (gate==8) f.message.packageName="example.UnapprovedApp";
+            if (gate==9) f.message.resourceId=BUSINESS+":id/unrelated";
+            if (gate==10) f.message.visible=false;
+            if (gate==11) f.service.keyguard.locked=true;
+            if (gate==12) f.service.magnification.scale=2f;
+            if (gate==13) f.list.children.add(null);
+            long token=AssistantSession.INSTANCE.start();
+            check(VisibleMessageService.captureForReview(token)!=null,label+" must refuse before text");
+            check(!AssistantSession.INSTANCE.active(),label+" failure invalidates session");
+            check(!AssistantSession.INSTANCE.mayUseProvider(token) && AssistantSession.INSTANCE.reviewCandidates(token).isEmpty()
+                    && AssistantSession.INSTANCE.visible(token).isEmpty(),label+" cannot retain sendable or preview context");
+            assertNoTextReads(f.root); scenarios++;
+        }
+    }
+    private static void localReviewRevalidationGate(int gate) {
+        try (Fixture f=new Fixture()) {
+            long token=startLocalReview(f);
+            check(VisibleMessageService.reviewStillCurrent(token),"Original metadata remains current");
+            check(AssistantSession.INSTANCE.approveReview(token,Arrays.asList("Approved selection")),"Pre-fault approval");
+            if (gate==0) f.service.keyguard.locked=true;
+            if (gate==1) f.root.packageName=AssistantSession.WHATSAPP;
+            if (gate==2) f.window.focused=false;
+            if (gate==3) f.window.id=8;
+            if (gate==4) f.root.windowId=8;
+            if (gate==5) f.window.bounds=new Rect(1,0,1080,1920);
+            if (gate==6) f.root.bounds=new Rect(0,0,1079,1920);
+            if (gate==7) f.entry.focused=false;
+            if (gate==8) f.entry.bounds=new Rect(1,1600,1080,1750);
+            if (gate==9) f.message.bounds=new Rect(30,200,610,300);
+            if (gate==10) f.root.children.add(node("new_overlay","android.view.View",100,210,300,250));
+            if (gate==11) f.list.children.add(null);
+            if (gate==12) f.service.magnification.scale=2f;
+            if (gate==13) f.service.onInterrupt();
+            if (gate==14) f.service.onDestroy();
+            check(!VisibleMessageService.reviewStillCurrent(token),"Changed review metadata must invalidate: "+gate);
+            check(!AssistantSession.INSTANCE.active(),"Changed review session ends: "+gate);
+            check(!AssistantSession.INSTANCE.mayUseProvider(token) && AssistantSession.INSTANCE.visible(token).isEmpty()
+                    && AssistantSession.INSTANCE.reviewCandidates(token).isEmpty(),"Changed review wipes approved and unapproved text");
+            assertOnlyMessageRead(f.root,f.message); scenarios++;
+        }
+    }
+    private static void localReviewEventsReadNothing(int eventKind) {
+        try (Fixture f=new Fixture()) {
+            long token=startLocalReview(f); int roots=f.window.rootCalls, windows=f.service.windowsCalls;
+            if (eventKind==3) f.service.registeredReceiver.onReceive(f.service,new android.content.Intent());
+            else {
+                android.view.accessibility.AccessibilityEvent event=new android.view.accessibility.AccessibilityEvent();
+                event.packageName=eventKind==2 ? "com.android.systemui" : BUSINESS;
+                event.eventType=eventKind==1 ? 8 : 2048;
+                f.service.onAccessibilityEvent(event);
+            }
+            check(!AssistantSession.INSTANCE.active() && !AssistantSession.INSTANCE.mayUseProvider(token),"Chat/focus/system/lock event ends local preview");
+            check(AssistantSession.INSTANCE.reviewCandidates(token).isEmpty() && AssistantSession.INSTANCE.visible(token).isEmpty(),"Event wipes local preview");
+            check(f.window.rootCalls==roots && f.service.windowsCalls==windows,"Event callbacks must not inspect windows or fetch roots");
+            assertOnlyMessageRead(f.root,f.message); scenarios++;
+        }
+    }
+    private static void localReviewBoundsStopFurtherGetters(boolean characters) {
+        try (Fixture f=new Fixture()) {
+            java.util.ArrayList<AccessibilityNodeInfo> messages=new java.util.ArrayList<>();
+            f.list.children.clear();
+            for (int i=0;i<(characters ? 2 : 13);i++) {
+                AccessibilityNodeInfo message=i==0 ? f.message : node("message_text","android.widget.TextView",20,200+i*60,600,240+i*60);
+                message.bounds=new Rect(20,200+i*60,600,240+i*60); message.localBounds=new Rect(0,0,580,40);
+                message.fixtureText=characters && i==0 ? "x".repeat(4000) : "row-"+i;
+                message.allowText=characters ? i==0 : i<12;
+                messages.add(message); f.list.children.add(message);
+            }
+            long token=AssistantSession.INSTANCE.start();
+            check(VisibleMessageService.captureForReview(token)==null,"Bounded review fixture succeeds");
+            java.util.List<String> candidates=AssistantSession.INSTANCE.reviewCandidates(token);
+            check(candidates.size()==(characters ? 1 : 12),"Review stores at most 12 bounded messages");
+            if (characters) check(candidates.get(0).length()==3000,"Review stores at most 3000 characters");
+            for (int i=0;i<messages.size();i++)
+                check(messages.get(i).textCalls==((characters ? i==0 : i<12) ? 1 : 0),"Never fetch text beyond preview bound");
+            check(AssistantSession.INSTANCE.visible(token).isEmpty() && !AssistantSession.INSTANCE.mayUseProvider(token),"Bounded capture remains local-only");
+            scenarios++;
+        }
+    }
+    private static void localReviewCases() {
+        check(!VisibleMessageService.available(),"Unavailable review fixture starts disconnected");
+        long unavailable=AssistantSession.INSTANCE.start();
+        check(VisibleMessageService.captureForReview(unavailable)!=null,"Unavailable review capture is refused");
+        check(!AssistantSession.INSTANCE.active() && !AssistantSession.INSTANCE.mayUseProvider(unavailable),"Unavailable review cannot leave an eligible provider session");
+        scenarios++;
+        localReviewSessionContract(); localReviewOverlapsThenExplicitApproval();
+        for (int i=0;i<14;i++) localReviewCaptureGate(i);
+        for (int i=0;i<15;i++) localReviewRevalidationGate(i);
+        for (int i=0;i<4;i++) localReviewEventsReadNothing(i);
+        localReviewBoundsStopFurtherGetters(false); localReviewBoundsStopFurtherGetters(true);
+    }
     public static void main(String[] args) {
         unavailableDrawingOrder(); eligibleMetadata(); unsupportedList(); clippedMessage(); externalOverlay();
         sameWindowOverlay(); screenClippedSize(); normalCaptureControl(); invalidTokenEndsSession();
-        sameCountersDifferentMasks(); lcaHierarchyCases();
+        sameCountersDifferentMasks(); lcaHierarchyCases(); localReviewCases();
         System.out.println("PASS "+checks+" checks across "+scenarios+" actual VisibleMessageService scenarios (host fakes; no Android/device verification)");
     }
 }

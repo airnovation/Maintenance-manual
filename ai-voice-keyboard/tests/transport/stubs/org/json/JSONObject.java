@@ -11,9 +11,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class JSONObject {
     private static final Map<String, JSONObject> FIXTURES = new ConcurrentHashMap<>();
+    public static int serializations, constructions;
     private final Map<String, Object> values = new LinkedHashMap<>();
-    public JSONObject() { }
+    public JSONObject() { constructions++; }
     public JSONObject(String source) {
+        constructions++;
         JSONObject fixture = FIXTURES.get(source);
         if (fixture == null) throw new IllegalArgumentException("Unregistered fixture body");
         values.putAll(fixture.values);
@@ -39,5 +41,5 @@ public final class JSONObject {
         Object value = values.get(key);
         return value instanceof Boolean ? (Boolean) value : fallback;
     }
-    @Override public String toString() { return values.toString(); }
+    @Override public String toString() { serializations++; return values.toString(); }
 }

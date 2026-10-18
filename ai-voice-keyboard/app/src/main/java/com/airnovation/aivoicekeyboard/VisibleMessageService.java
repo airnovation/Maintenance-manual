@@ -28,6 +28,23 @@ public final class VisibleMessageService extends AccessibilityService {
         if (connected == null) return "请先手动启用输入助手的无障碍服务；未读取或上传。";
         return connected.capture(token, false);
     }
+    /** Explicit local preview only; the panel must show its coverage warning first. */
+    static String captureForReview(long token) {
+        if (!AssistantSession.INSTANCE.beginReview(token)) return "请重新启动本机预览；未读取或上传。";
+        VisibleMessageService service=connected;
+        if (service == null) {
+            AssistantSession.INSTANCE.invalidate();
+            return "请先手动启用输入助手的无障碍服务；未读取或上传。";
+        }
+        service.capturedReviewToken=-1;
+        return service.capture(token,false,false,true,false);
+    }
+    /** Revalidate review metadata without rereading text or changing approved content. */
+    static boolean reviewStillCurrent(long token) {
+        if (!AssistantSession.INSTANCE.reviewMode(token)) return false;
+        if (connected == null) { AssistantSession.INSTANCE.invalidate(); return false; }
+        return connected.capture(token,true,false,false,true)==null;
+    }
     /** Explicit local diagnostics: no node text access and no provider call. */
     static String diagnose(long token) {
         try {
@@ -36,6 +53,7 @@ public final class VisibleMessageService extends AccessibilityService {
         } finally { AssistantSession.INSTANCE.invalidate(); }
     }
     static boolean stillCurrent(long token) {
+        if (AssistantSession.INSTANCE.reviewMode(token)) return reviewStillCurrent(token);
         return connected != null && connected.capture(token, true) == null;
     }
     @Override protected void onServiceConnected() {
@@ -46,6 +64,8 @@ public final class VisibleMessageService extends AccessibilityService {
         registered = true;
     }
     private String capturedWindowGeometry;
+    private long capturedReviewToken=-1;
+    private String capturedReviewRootGeometry, capturedReviewEditorGeometry, capturedReviewTreeGeometry;
     private boolean safeUnchangedStatusBarEvent(AccessibilityEvent event) {
         try { return unchangedStatusBarEvent(event); }
         catch (RuntimeException ignored) { return false; }
@@ -84,6 +104,8 @@ public final class VisibleMessageService extends AccessibilityService {
         // Our own IME button/preview changes are not a navigation signal.
         if (getPackageName().equals(pkg) && (type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
                 || type == AccessibilityEvent.TYPE_VIEW_FOCUSED)) return;
+        // Review event callbacks only invalidate; they never inspect roots or text.
+        if (session.reviewMode(session.token())) { session.invalidate(); return; }
         // Status-bar clock changes do not change the chat. Window/focus events still
         // invalidate, and every result/insert revalidates the focused root and snapshot.
         if ("com.android.systemui".equals(pkg)
@@ -97,7 +119,12 @@ public final class VisibleMessageService extends AccessibilityService {
         return capture(token, compareOnly, false);
     }
     private String capture(long token, boolean compareOnly, boolean metadataOnly) {
+        return capture(token,compareOnly,metadataOnly,false,false);
+    }
+    private String capture(long token, boolean compareOnly, boolean metadataOnly, boolean reviewCapture, boolean reviewCheck) {
         if (!session.active() || session.token() != token) return "会话已结束，请重新启动。";
+        if (session.reviewMode(token) && !reviewCapture && !reviewCheck && !metadataOnly)
+            return fail("本机预览内容必须单独确认，未重新读取或上传。");
         KeyguardManager keyguard = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
         if (keyguard == null || keyguard.isKeyguardLocked()) return fail("屏幕已锁定。");
         if (getMagnificationController().getScale() != 1f) return fail("放大显示尚未支持，请关闭放大后重试。");
@@ -149,38 +176,68 @@ public final class VisibleMessageService extends AccessibilityService {
             List<NodeText> found = new ArrayList<>();
             List<AssistantNodeFilter.Region> sameWindowMasks = new ArrayList<>();
             boolean[] editorFound = {false};
+            String[] editorGeometry = {""};
             List<String> messages = new ArrayList<>();
             AssistantCaptureDiagnostics diagnostics = new AssistantCaptureDiagnostics(BuildConfig.VERSION_NAME);
             int[] visited = {0};
+            Rect rootBounds = new Rect(); root.getBoundsInScreen(rootBounds);
+            String snapshotBinding = "unverified-window:" + root.getWindowId();
             try {
-                collect(root, sourcePackage, viewport, occlusions, found, sameWindowMasks, new ArrayList<>(), new ArrayList<>(), false, editorFound, visited, diagnostics);
+                collect(root, sourcePackage, viewport, occlusions, found, sameWindowMasks, new ArrayList<>(), new ArrayList<>(), false, editorFound, editorGeometry, visited, diagnostics);
                 if (visited[0] >= 250) return fail("页面节点过多，无法完整检查遮挡；未读取消息。");
                 if (!editorFound[0]) return fail("未识别当前WhatsApp/Business消息输入框。请点聊天底部输入框；搜索或未知版本布局不读取。");
+                if (reviewCheck) {
+                    if (capturedReviewToken!=token || !session.matchesWindow(token,sourcePackage,snapshotBinding)
+                            || !windowGeometry(windows).equals(capturedWindowGeometry)
+                            || !rootBounds.toShortString().equals(capturedReviewRootGeometry)
+                            || !editorGeometry[0].equals(capturedReviewEditorGeometry)
+                            || !reviewGeometry(found,sameWindowMasks).equals(capturedReviewTreeGeometry))
+                        return fail("当前窗口或输入框已变化，请重新打开本机预览。");
+                    return null; // Metadata only: no getText and no session.capture/approval mutation.
+                }
+                String localReviewGeometry=reviewCapture ? reviewGeometry(found,sameWindowMasks) : null;
+                if (reviewCapture) capturedReviewTreeGeometry=localReviewGeometry;
                 diagnostics.candidates = found.size();
                 found.sort(Comparator.comparingInt((NodeText n) -> n.top).thenComparingInt(n -> n.left));
+                int previewChars=0;
                 for (NodeText node : found) {
+                    if (reviewCapture && (messages.size()==AssistantSession.MAX_MESSAGES
+                            || previewChars==AssistantSession.MAX_CHARS)) break;
                     AssistantNodeFilter.Assessment assessment = AssistantNodeFilter.assess(
                             box(node.bounds), box(node.clip), node.ancestors, node.path, sameWindowMasks);
                     diagnostics.assessment(assessment);
                     boolean unobscured = assessment.allowed;
-                    // Only after both clipping and known same-window overlap checks, access message text.
+                    // collect already enforces clipping, original size and external windows.
+                    // Strict capture also requires same-window order; explicit local review
+                    // permits covered candidates only for the disclosed on-device preview.
                     if (!unobscured) {
                         diagnostics.sameWindowOverlap++;
                         diagnostics.overlaps(box(node.bounds), node.parentId, node.drawingOrder, node.ancestors, sameWindowMasks);
-                        continue;
+                        if (!reviewCapture) continue;
                     }
                     diagnostics.eligible++;
                     if (metadataOnly) continue; // Never access text in local diagnostics.
                     CharSequence text = node.node.getText();
                     if (text == null) diagnostics.missingText++;
-                    else messages.add(text.toString());
+                    else if (reviewCapture) {
+                        String value=text.subSequence(0,Math.min(text.length(),AssistantSession.MAX_CHARS-previewChars)).toString();
+                        if (!value.trim().isEmpty()) { messages.add(value); previewChars+=value.length(); }
+                    } else messages.add(text.toString());
                 }
             } finally { for (NodeText node : found) node.node.recycle(); }
             if (metadataOnly) return fail(diagnostics.metadataResult(visited[0]));
             if (messages.isEmpty()) return fail(diagnostics.emptyResult(visited[0]));
             // This is an ephemeral window binding, NOT proof of unique chat identity.
             // It permits a bounded explanation; automatic insertion remains disabled.
-            String snapshotBinding = "unverified-window:" + root.getWindowId();
+            if (reviewCapture) {
+                if (!session.captureReview(token,sourcePackage,snapshotBinding,true,true,messages))
+                    return fail("本机预览会话已变化，请重新启动。");
+                capturedReviewToken=token;
+                capturedWindowGeometry=windowGeometry(windows);
+                capturedReviewRootGeometry=rootBounds.toShortString();
+                capturedReviewEditorGeometry=editorGeometry[0];
+                return null;
+            }
             if (compareOnly && !bounded(messages).equals(session.visible(token))) return fail("当前可见消息已变化，请重新启动助手。");
             if (!session.capture(token, sourcePackage, snapshotBinding, true, true, messages))
                 return "会话已变化，请重新启动。";
@@ -191,6 +248,25 @@ public final class VisibleMessageService extends AccessibilityService {
             if (root != null) root.recycle();
             for (AccessibilityWindowInfo window : windows) window.recycle();
         }
+    }
+    private String reviewGeometry(List<NodeText> nodes, List<AssistantNodeFilter.Region> masks) {
+        StringBuilder out=new StringBuilder();
+        for (NodeText node:nodes) {
+            out.append("N:").append(node.bounds.toShortString()).append(':').append(node.clip.toShortString());
+            appendPath(out,node.path);
+        }
+        for (AssistantNodeFilter.Region mask:masks) {
+            out.append("M:").append(mask.box.left).append(',').append(mask.box.top).append(',')
+                    .append(mask.box.right).append(',').append(mask.box.bottom).append(':').append(mask.kind);
+            appendPath(out,mask.path);
+        }
+        return out.toString();
+    }
+    private void appendPath(StringBuilder out,List<AssistantNodeFilter.Layer> path) {
+        for (AssistantNodeFilter.Layer layer:path)
+            out.append('/').append(layer.nodeId).append(':').append(layer.drawingOrder).append(':')
+                    .append(layer.reportedKind).append(':').append(layer.supported).append(':').append(layer.orderError);
+        out.append(';');
     }
     private List<String> bounded(List<String> values) {
         List<String> out = new ArrayList<>(); int chars = 0;
@@ -204,7 +280,7 @@ public final class VisibleMessageService extends AccessibilityService {
     private String fail(String reason) { session.invalidate(); return reason; }
     private void collect(AccessibilityNodeInfo node, String sourcePackage, Rect ancestorClip, List<Rect> occlusions,
             List<NodeText> out, List<AssistantNodeFilter.Region> sameWindowMasks, List<Integer> ancestors, List<AssistantNodeFilter.Layer> parentPath, boolean insideConversation,
-            boolean[] editorFound, int[] visited, AssistantCaptureDiagnostics diagnostics) {
+            boolean[] editorFound, String[] editorGeometry, int[] visited, AssistantCaptureDiagnostics diagnostics) {
         int nodeId = ++visited[0];
         List<AssistantNodeFilter.Layer> path = new ArrayList<>(parentPath);
         path.add(drawingLayer(nodeId, node));
@@ -229,7 +305,10 @@ public final class VisibleMessageService extends AccessibilityService {
         for (Rect covered : occlusions) if (Rect.intersects(bounds, covered)) { unobscured = false; break; }
         if (node.isEditable()) {
             sameWindowMasks.add(mask(nodeId, node, bounds, ancestors, path));
-            if (fullyInside && unobscured && AssistantSession.isResource(pkg, id, "entry") && node.isFocused()) editorFound[0] = true;
+            if (fullyInside && unobscured && AssistantSession.isResource(pkg, id, "entry") && node.isFocused()) {
+                editorFound[0] = true;
+                editorGeometry[0] += node.getWindowId()+":"+bounds.toShortString()+";";
+            }
             return; // Never read the existing typed draft through Accessibility.
         }
         boolean message = AssistantSession.isResource(pkg, id, "message_text");
@@ -250,7 +329,7 @@ public final class VisibleMessageService extends AccessibilityService {
             AccessibilityNodeInfo child = node.getChild(i);
             if (child == null) throw new IllegalStateException("Incomplete accessibility hierarchy");
             try {
-                collect(child, sourcePackage, childClip, occlusions, out, sameWindowMasks, childAncestors, path, inList, editorFound, visited, diagnostics);
+                collect(child, sourcePackage, childClip, occlusions, out, sameWindowMasks, childAncestors, path, inList, editorFound, editorGeometry, visited, diagnostics);
             } finally { child.recycle(); }
         }
     }

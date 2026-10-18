@@ -1,3 +1,15 @@
+## v0.17: local preview before selected-content upload
+
+In a WhatsApp / WhatsApp Business message input, tap **启动助手**, read the warning, then **同意预览**. No Gemini key is needed to preview. Android-provided current-region message text may include parts covered by same-window overlays; it is not a pixel-visibility guarantee. The preview contains at most 12 messages / 3,000 characters, and long messages may be shortened in the visible preview.
+
+Review the read-only messages and uncheck any you do not want included. Only **确认上传** approves the displayed selected strings for Gemini explanation and contextual reply drafting. Configure your own Gemini key on the device only when ready to use that online step. No text editing is offered in this iteration. No background capture, history scrolling, OCR, automatic sending or new permissions are added. Events or metadata changes invalidate the snapshot; real-device behavior still needs testing. See LOCAL_REVIEW.md.
+
+This approved build has a fresh ephemeral development certificate and cannot install over the old Isolated Test app. Replace ONLY **AI Voice Keyboard - Isolated Test**; preserve the original keyboard. Re-enable the new test keyboard and its Accessibility service manually. No app is uninstalled automatically. Signing material is removed in CI, never shipped or reused as the production identity.
+
+---
+
+Historical release notes follow; their diagnostic-only steps do not describe v0.17's new preview flow.
+
 ## v0.16: comprehensive local gate diagnostics
 
 Reading decisions are unchanged from v15. The same classifier now supplies

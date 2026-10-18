@@ -19,6 +19,8 @@ public final class AssistantSession {
     public static final int MAX_MESSAGES = 12, MAX_CHARS = 3000;
     private long generation;
     private boolean active;
+    private boolean reviewMode, reviewApproved;
+    private List<String> reviewCandidates = Collections.emptyList();
     private String windowIdentity, sourcePackage;
     private List<String> visible = Collections.emptyList();
     private String explanation = "", draft = "";
@@ -31,6 +33,8 @@ public final class AssistantSession {
     public synchronized void invalidate() {
         generation++;
         active = false;
+        reviewMode = false; reviewApproved = false;
+        reviewCandidates = Collections.emptyList();
         windowIdentity = null;
         sourcePackage = null;
         visible = Collections.emptyList();
@@ -41,7 +45,7 @@ public final class AssistantSession {
     public synchronized long token() { return generation; }
     public synchronized boolean capture(long token, String pkg, String identity,
             boolean focused, boolean unlocked, List<String> messages) {
-        if (!active || token != generation) return false;
+        if (!active || token != generation || reviewMode) return false;
         if (!isWhatsApp(pkg) || !focused || !unlocked || identity == null || identity.isEmpty()) {
             invalidate(); return false;
         }
@@ -68,11 +72,71 @@ public final class AssistantSession {
         visible = Collections.unmodifiableList(bounded);
         return true;
     }
+    /** Enter an explicit local-only review before any candidate text is obtained. */
+    public synchronized boolean beginReview(long token) {
+        if (!active || token != generation || reviewMode) return false;
+        reviewMode=true; reviewApproved=false;
+        visible=Collections.emptyList(); reviewCandidates=Collections.emptyList();
+        explanation=""; draft="";
+        return true;
+    }
+    public synchronized boolean reviewMode(long token) {
+        return active && token == generation && reviewMode;
+    }
+    /** Capture only local RAM candidates. This never establishes provider context. */
+    public synchronized boolean captureReview(long token, String pkg, String identity,
+            boolean focused, boolean unlocked, List<String> messages) {
+        if (!active || token != generation || !reviewMode || reviewApproved) return false;
+        if (!isWhatsApp(pkg) || !focused || !unlocked || identity == null || identity.isEmpty()
+                || messages == null || (windowIdentity != null
+                    && (!windowIdentity.equals(identity) || !pkg.equals(sourcePackage)))) {
+            invalidate(); return false;
+        }
+        ArrayList<String> bounded=new ArrayList<>(); int chars=0;
+        for (String value:messages) {
+            if (value==null || value.trim().isEmpty()) continue;
+            int remaining=MAX_CHARS-chars;
+            if (remaining<=0 || bounded.size()==MAX_MESSAGES) break;
+            String text=value.substring(0,Math.min(value.length(),remaining));
+            bounded.add(text); chars+=text.length();
+        }
+        if (bounded.isEmpty()) { invalidate(); return false; }
+        windowIdentity=identity; sourcePackage=pkg;
+        reviewCandidates=Collections.unmodifiableList(bounded);
+        visible=Collections.emptyList(); explanation=""; draft="";
+        return true;
+    }
+    public synchronized List<String> reviewCandidates(long token) {
+        return active && token == generation && reviewMode && !reviewApproved
+                ? reviewCandidates : Collections.emptyList();
+    }
+    /** Only an explicit chosen-and-edited approval may make local content sendable. */
+    public synchronized boolean approveReview(long token, List<String> selectedEditedList) {
+        if (!active || token != generation || !reviewMode || reviewApproved
+                || reviewCandidates.isEmpty() || selectedEditedList==null
+                || selectedEditedList.isEmpty() || selectedEditedList.size()>MAX_MESSAGES) return false;
+        ArrayList<String> approved=new ArrayList<>(); int chars=0;
+        for (String text:selectedEditedList) {
+            if (text==null || text.trim().isEmpty() || text.length()>MAX_CHARS-chars) return false;
+            approved.add(text); chars+=text.length();
+        }
+        visible=Collections.unmodifiableList(approved);
+        reviewCandidates=Collections.emptyList(); reviewApproved=true;
+        explanation=""; draft="";
+        return true;
+    }
+    public synchronized boolean mayUseProvider(long token) {
+        return active && token == generation && (!reviewMode || reviewApproved);
+    }
+    public synchronized boolean matchesWindow(long token, String pkg, String identity) {
+        return active && token == generation && windowIdentity != null
+                && windowIdentity.equals(identity) && pkg.equals(sourcePackage);
+    }
     public synchronized List<String> visible(long token) {
         return active && token == generation ? visible : Collections.emptyList();
     }
     public synchronized boolean accept(long token, String chinese, String english) {
-        if (!active || token != generation) return false;
+        if (!active || token != generation || (reviewMode && !reviewApproved)) return false;
         if (chinese != null) explanation = chinese;
         if (english != null) draft = english;
         return true;

@@ -59,7 +59,7 @@ public final class AssistantPanelTtsTest {
             ScrollView scroll = (ScrollView)h.root.children.get(0);
             check(!scroll.isShown() && !h.output.isShown(), "closed panel hides output through scroll ancestor");
             clickShown(Harness.find(h.root, "启动助手"), "start");
-            check(h.text().contains("本次助手会话"), "start renders disclosure without capture");
+            check(h.text().contains("本次仅在你点击同意后"), "start renders disclosure without capture");
             clickShown(Harness.find(h.root, "仅模拟演示（不联网）"), "synthetic demo"); Handler.drain();
             equal(View.VISIBLE, scroll.getVisibility(), "demo expands scroll");
             equal(View.VISIBLE, h.output.getVisibility(), "demo output is visible");
@@ -201,14 +201,14 @@ public final class AssistantPanelTtsTest {
         run("completed diagnostic does not authorize speech recording insertion or reading", () -> {
             Harness h = diagnosticHarness();
             clickShown(Harness.find(h.root, "本机诊断（不读文字）"), "one-shot diagnostic");
-            clickShown(h.reply, "reply after diagnostic"); check(h.text().contains("请先启动助手"), "diagnostic alone cannot start a reply");
+            clickShown(h.reply, "reply after diagnostic"); check(h.text().contains("请先核对本机预览并确认上传"), "diagnostic alone cannot start a reply");
             clickShown(h.speech, "speech after diagnostic"); check(h.text().contains("请先取得中文解释"), "counts are not spoken as an explanation");
             clickShown(Harness.find(h.root, "插入到当前框"), "insert after diagnostic");
             check(h.text().contains("请先完成回复预览"), "counts cannot become an insertion draft");
             equal(0, TextToSpeech.instances.size(), "diagnostic does not initialize speech");
             diagnosticQuiet(h);
             clickShown(Harness.find(h.root, "启动助手"), "fresh start after diagnostic");
-            check(h.text().contains("本次助手会话") && Harness.find(h.root, "同意并读取") != null, "ordinary read still requires its own disclosure and consent click");
+            check(h.text().contains("本次仅在你点击同意后") && Harness.find(h.root, "同意预览") != null, "ordinary read still requires its own disclosure and consent click");
             equal(0, VisibleMessageService.captureCalls, "new reading consent is not bypassed");
             equal(0, GeminiAssistantTransport.latest.requestCalls, "diagnostic never falls through to explain");
         });
@@ -531,7 +531,8 @@ public final class AssistantPanelTtsTest {
         Harness() throws Exception { this(true); }
         Harness(boolean setupSession) throws Exception {
             active = this; panel.addTo(root);
-            output = (TextView)((ScrollView)root.children.get(0)).child;
+            View content = ((ScrollView)root.children.get(0)).child;
+            output = content instanceof TextView ? (TextView)content : (TextView)((LinearLayout)content).children.get(0);
             speech = find(root, "中文朗读"); reply = find(root, "口述回复");
             if (setupSession) { panel.editorChanged(true); Handler.drain(); activate("Synthetic Chinese explanation"); }
         }

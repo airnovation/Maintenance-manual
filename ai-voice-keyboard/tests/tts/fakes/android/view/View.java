@@ -3,6 +3,11 @@ import android.content.Context;
 public class View {
     public static final int VISIBLE = 0, GONE = 8;
     public static int defaultBackgroundColor;
+    public static final int IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS = 8;
+    public boolean saveEnabled = true;
+    public int importantForAutofill;
+    public void setSaveEnabled(boolean value) { saveEnabled = value; }
+    public void setImportantForAutofill(int value) { importantForAutofill = value; }
     private OnClickListener click;
     public int visibility;
     public View parent;

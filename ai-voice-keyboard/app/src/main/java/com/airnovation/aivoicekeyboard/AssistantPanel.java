@@ -15,6 +15,9 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.CheckBox;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Collections;
 import java.util.function.BooleanSupplier;
@@ -30,7 +33,11 @@ final class AssistantPanel {
     private final AssistantRecorder recorder;
     private TextView output;
     private ScrollView scroll;
-    private LinearLayout actions, examples;
+    private LinearLayout actions, examples, reviewRows;
+    private final List<CheckBox> reviewChecks = new ArrayList<>();
+    private final List<TextView> reviewEdits = new ArrayList<>();
+    private final List<String> reviewTexts = new ArrayList<>();
+    private boolean reviewing;
     private Button start, reply, insert;
     private boolean insertionConfirmed;
     private TextToSpeech tts;
@@ -70,7 +77,11 @@ final class AssistantPanel {
         // Keep preview/error text legible independently of the host's light/dark theme.
         output.setTextColor(0xFF000000); output.setBackgroundColor(0xFFFFFFFF);
         output.setText("助手默认关闭 · 普通Gemini API · 中文离线朗读 · 回复仅预览");
-        scroll = new ScrollView(context); scroll.addView(output);
+        scroll = new ScrollView(context);
+        LinearLayout content = new LinearLayout(context); content.setOrientation(LinearLayout.VERTICAL);
+        content.addView(output);
+        reviewRows = new LinearLayout(context); reviewRows.setOrientation(LinearLayout.VERTICAL);
+        content.addView(reviewRows); scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, (int)(140 * context.getResources().getDisplayMetrics().density)));
         LinearLayout controls = new LinearLayout(context); root.addView(controls);
         start = button(controls, "启动助手", this::startOrConsent);
@@ -107,25 +118,72 @@ final class AssistantPanel {
         return true;
     }
     private void startOrConsent() {
-        if (!readyEditor()) return;
+        if (destroyed || !readyEditor()) return;
+        if (reviewing) { sendReviewed(); return; }
         if (!consentPending) {
-            stop(); setExpanded(true); consentPending = true; start.setText("同意并读取");
-            output.setText("本次助手会话：只读取WhatsApp当前屏幕可见的文字消息（最多12条、3000字符），发送给Gemini做中文解释和回复校对。文本中可能包含其他人的信息。不会读取历史、通知、截图或附件，不滚动，不自动发送。\n\n口述回复只在你按下后录音；按停止时将录音发给Gemini转写，并连同本次消息生成英文预览。仅使用设备现有Gemini配置。关闭、锁屏或页面变化会结束会话；已发出的请求不能撤回。\n\n只有你手动启用系统无障碍权限后才能读取；该系统权限本身不限于WhatsApp。点击“同意并读取”开始本次会话，或“关闭”取消。请先用无敏感信息的测试聊天验证。");
+            stop(); setExpanded(true); consentPending=true; start.setText("同意预览");
+            output.setText("本次仅在你点击同意后读取当前WhatsApp/Business聊天区域的已识别文字消息（最多12条、3000字符）。"
+                    + "\n\nAndroid提供的当前消息文字，可能含被浮层遮住部分。仅本机预览；确认所选内容后才交给Gemini。"
+                    + "\n\n你可以核对预览、取消勾选；未点确认上传前，不调用Gemini、不录音、不朗读、不插入。"
+                    + "不翻历史、不后台读取、不看通知或图片、不滚动、不自动发送。页面变化会清除预览。"
+                    + "\n\n系统无障碍权限本身不限于WhatsApp，需你自行启用。本机预览无需Gemini密钥。点击同意预览，或关闭取消。");
             return;
         }
-        if (!VisibleMessageService.available()) { output.setText("尚未启用无障碍服务。请点“权限设置”，自行启用"
-                + (context.getPackageName().endsWith(".assistanttest") ? "Input Assistant - Isolated Test" : "Optional Input Assistant")
-                + "，再返回重新确认。当前未读取或上传。"); return; }
-        if (!"gemini".equals(context.getSharedPreferences("voice_keyboard_settings", Context.MODE_PRIVATE)
-                .getString("selected_provider", "openai"))) { output.setText("助手仅使用Gemini。请先在现有键盘设置选择Gemini，不会自动切换服务商。"); return; }
-        if (SecureSettings.getApiKey(context, "gemini").isEmpty()) { output.setText("请先在现有键盘设置保存Gemini API Key；不要把密钥发到聊天。"); return; }
-        teardown(); demo = false;
-        long token = session.start(); shownToken = token;
-        String error = VisibleMessageService.captureOnce(token);
-        shownToken = session.token();
-        if (error != null) { output.setText(error); return; }
-        busy = true; output.setText("正在用Gemini解释本次可见消息… 点击关闭可结束会话。");
-        AssistantGemini.explainVisible(transport, session, this::showResponse);
+        if (!VisibleMessageService.available()) {
+            output.setText("尚未启用无障碍服务。请点权限设置，自行启用"
+                    + (context.getPackageName().endsWith(".assistanttest") ? "Input Assistant - Isolated Test" : "Optional Input Assistant")
+                    + "后返回确认。当前未读取或上传。"); return;
+        }
+        teardown(); demo=false;
+        long token=session.start(); shownToken=token;
+        String error=VisibleMessageService.captureForReview(token);
+        shownToken=session.token();
+        if (error!=null) { output.setText(error); return; }
+        reviewing=true; start.setText("确认上传");
+        output.setText("本机预览，尚未上传。最多12条、3000字符，长消息可能只显示前段。Android提供的当前消息文字，可能含被浮层遮住部分。"
+                + "\n核对下列文字、取消不需要的勾选；确认上传会把所选原样交给Gemini做中文解释及本次回复校对。"
+                + "可能含他人信息；已发送请求不能撤回。关闭或页面变化会清除本机内容。");
+        int index=0;
+        for (String text:session.reviewCandidates(token)) {
+            CheckBox selected=new CheckBox(context); selected.setText("采用第"+(++index)+"条"); selected.setChecked(true);
+            selected.setTextColor(0xFF000000); selected.setBackgroundColor(0xFFFFFFFF);
+            TextView edit=new TextView(context); edit.setText(text);
+            edit.setTextColor(0xFF000000); edit.setBackgroundColor(0xFFFFFFFF);
+            edit.setTextIsSelectable(true);
+            edit.setSaveEnabled(false);
+            edit.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+            reviewRows.addView(selected); reviewRows.addView(edit);
+            reviewChecks.add(selected); reviewEdits.add(edit); reviewTexts.add(text);
+        }
+    }
+    private void sendReviewed() {
+        long token=session.token();
+        if (!reviewing || !session.reviewMode(token) || !VisibleMessageService.reviewStillCurrent(token)) {
+            stopWithReason(); return;
+        }
+        if (!"gemini".equals(context.getSharedPreferences("voice_keyboard_settings",Context.MODE_PRIVATE)
+                .getString("selected_provider","openai"))) {
+            output.setText("本机预览未上传。请先在键盘设置选择Gemini；不会自动切换服务商。返回聊天后需重新预览。"); return;
+        }
+        if (SecureSettings.getApiKey(context,"gemini").isEmpty()) {
+            output.setText("本机预览未上传。请先在键盘设置保存Gemini API Key，不要发到聊天。返回后需重新预览。"); return;
+        }
+        List<String> selected=new ArrayList<>();
+        for (int i=0;i<reviewChecks.size();i++)
+            if (reviewChecks.get(i).isChecked()) selected.add(reviewTexts.get(i));
+        if (!session.approveReview(token,selected)) {
+            output.setText("未上传。请选择至少一条非空文字，总共最多12条、3000字符；不会自动截断所选文字。"); return;
+        }
+        clearReview(); busy=true; start.setText("启动助手");
+        output.setText("正在把你确认的所选文字交给Gemini解释…关闭可结束会话，已发送内容不能撤回。");
+        AssistantGemini.explainVisible(transport,session,this::showResponse);
+    }
+    private void clearReview() {
+        reviewing=false;
+        // Remove RAM-only strings as well as their views on every invalidation.
+        for (TextView edit:reviewEdits) edit.setText("");
+        reviewChecks.clear(); reviewEdits.clear(); reviewTexts.clear();
+        if (reviewRows!=null) reviewRows.removeAllViews();
     }
     private boolean current(long token) {
         return !destroyed && session.active() && token == session.token() && (demo || VisibleMessageService.stillCurrent(token));
@@ -145,7 +203,7 @@ final class AssistantPanel {
         if (destroyed) return;
         insertionConfirmed = false; insert.setText("插入到当前框");
         if (!readyEditor()) return;
-        if (!session.active()) { output.setText("请先启动助手并读取当前消息。"); return; }
+        if (!session.mayUseProvider(session.token())) { output.setText("请先核对本机预览并确认上传，再使用口述回复。"); return; }
         if (demo) { output.setText("模拟口述意图：我先确认时间再回复你。\n英文预览：\n" + session.draft() + "\n仅模拟，未录音或联网。"); return; }
         if (busy) { output.setText("正在处理上一请求，请等待或关闭助手。"); return; }
         long token = session.token();
@@ -306,6 +364,7 @@ final class AssistantPanel {
         // If a ready engine cannot stop, shut it down as a best-effort fallback.
         // Cleanup of the session and recorder must continue even if either API fails.
         if (!cancelSpeech()) releaseSpeechEngine();
+        clearReview();
         transport.cancel(); recorderCancel(); busy = false; consentPending = false; transcript = "";
         insertionConfirmed = false; if (insert != null) insert.setText("插入到当前框");
         if (start != null) start.setText("启动助手");

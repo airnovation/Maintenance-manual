@@ -9,11 +9,11 @@ public final class AssistantGemini {
     }
     public static void explainVisible(Transport transport, AssistantSession session, Callback callback) {
         long token = session.token();
-        if (!session.active() || session.visible(token).isEmpty()) {
+        if (!session.mayUseProvider(token) || session.visible(token).isEmpty()) {
             callback.done(token, null, null, "请先启动会话并读取当前消息。"); return;
         }
         transport.request(session, token, null, (id, chinese, english, error) -> {
-            if (session.active() && session.token() == id) callback.done(id, chinese, english, error);
+            if (session.mayUseProvider(id)) callback.done(id, chinese, english, error);
         });
     }
     public static void demo(long token, Callback callback) {

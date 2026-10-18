@@ -8,7 +8,7 @@ for forbidden in ('api.openai.com', 'OpenAiEnglish', 'GeminiEnglish.rewrite', 'L
     assert forbidden not in transport, forbidden
 assert 'setInstanceFollowRedirects(false)' in transport
 assert 'AssistantResponsePolicy.requireComplete(candidate.optString("finishReason", "")' in transport
-assert 'session.token() != token' in transport
+assert 'session.mayUseProvider(token)' in transport
 assert '65536' in transport and 'maxOutputTokens' in transport
 service = (src/'VisibleMessageService.java').read_text()
 for forbidden in ('performAction(', 'dispatchGesture(', 'performGlobalAction(', 'getNotification', 'event.getText();'):
@@ -58,7 +58,7 @@ import re
 assert re.search(r'if\s*\(\s*"com\.android\.systemui"\.equals\(pkg\)\s*&&\s*type == AccessibilityEvent\.TYPE_WINDOW_CONTENT_CHANGED\s*&&\s*safeUnchangedStatusBarEvent\(event\)\s*\)\s*return;', callback)
 assert callback.rfind('session.invalidate();') > callback.find('safeUnchangedStatusBarEvent(event)')
 capture = service.split('private String capture(long token, boolean compareOnly, boolean metadataOnly) {')[1].split('private List<String> bounded')[0]
-assert capture.index('capturedWindowGeometry = windowGeometry(windows);') > capture.index('if (!session.capture(')
+assert 'capturedWindowGeometry = windowGeometry(windows);' in capture
 # A switch between the two supported applications must fail BEFORE reading the
 # newly focused application's messages, not merely when storing the snapshot.
 read_source_guard = re.search(
@@ -101,7 +101,24 @@ panel = (src/'AssistantPanel.java').read_text()
 for forbidden in ('commitText(', 'performEditorAction(', 'AudioTranscriber', 'getCurrentInputConnection'):
     assert forbidden not in panel, forbidden
 assert '!voice.isNetworkConnectionRequired()' in panel
-assert 'consentPending' in panel and '同意并读取' in panel
+assert 'consentPending' in panel and '同意预览' in panel and '确认上传' in panel
+assert '可能含被浮层遮住部分' in panel
+start_flow = panel.split('private void startOrConsent()')[1].split('private void sendReviewed()')[0]
+assert 'captureForReview(token)' in start_flow
+assert 'AssistantGemini.explainVisible' not in start_flow
+assert 'getApiKey' not in start_flow and 'selected_provider' not in start_flow
+send_flow = panel.split('private void sendReviewed()')[1].split('private void clearReview()')[0]
+assert send_flow.index('reviewStillCurrent(token)') < send_flow.index('approveReview(token,selected)')
+assert send_flow.index('approveReview(token,selected)') < send_flow.index('AssistantGemini.explainVisible')
+assert 'clearReview();' in panel
+assert 'EditText' not in panel
+assert 'setSaveEnabled(false)' in panel
+assert 'IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS' in panel
+assert 'selected.add(reviewTexts.get(i))' in panel
+assert 'reviewStillCurrent(token)' in service
+assert 'session.reviewMode(token)' in service
+assert 'return null; // Metadata only: no getText' in service
+assert 'session.captureReview(' in service
 assert 'ACTION_SCREEN_OFF' in panel
 assert 'setTextIsSelectable(true)' in panel
 recorder = (src/'AssistantRecorder.java').read_text()

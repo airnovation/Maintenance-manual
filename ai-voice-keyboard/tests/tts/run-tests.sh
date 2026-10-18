@@ -8,6 +8,10 @@ src=app/src/main/java/com/airnovation/aivoicekeyboard
 panel=${TTS_PANEL_SOURCE:-$src/AssistantPanel.java}
 find tests/tts/fakes -name '*.java' -print | sort > "$out/sources"
 printf '%s\n' "$panel" "$src/AssistantSession.java" "$src/AssistantGemini.java" \
-    tests/tts/AssistantPanelTtsTest.java >> "$out/sources"
+    tests/tts/AssistantPanelTtsTest.java tests/tts/AssistantPanelPreviewTest.java >> "$out/sources"
 java -m jdk.compiler/com.sun.tools.javac.Main -source 17 -target 17 -d "$out/classes" @"$out/sources"
 java -cp "$out/classes" com.airnovation.aivoicekeyboard.AssistantPanelTtsTest "$@"
+
+if [ "${1:-}" != "--regression-only" ]; then
+    java -cp "$out/classes" com.airnovation.aivoicekeyboard.AssistantPanelPreviewTest
+fi

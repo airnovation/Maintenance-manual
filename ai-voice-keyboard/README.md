@@ -1,3 +1,9 @@
+## Current v0.17 isolated test
+
+Explicit local preview and selected-message approval are described in [LOCAL_REVIEW.md](LOCAL_REVIEW.md). Start → accept local-preview warning → inspect/uncheck messages → confirm upload to your configured Gemini service. Preview needs no key. Same-window covered text may be included; real-device usability remains unverified. See [ISOLATED_TEST.md](ISOLATED_TEST.md) for replacement-only test installation and temporary certificate limits.
+
+The release below is historical documentation.
+
 # Local assistant candidate (unpublished)
 
 This review-only candidate is based on commit f36f5e27cc0f763dbfac7857cf7f5e6e7bdf767f

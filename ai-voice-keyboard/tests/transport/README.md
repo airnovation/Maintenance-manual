@@ -39,9 +39,20 @@ than `--release 17`; this is a host regression, not Android/API type validation.
 
 ## Covered behavior
 
-The suite currently contains 38 scenarios and 504 assertions, including worker
+The suite currently contains 46 scenarios and 693 assertions, including worker
 executor termination:
 
+- Local review before and after candidate capture rejects explanations, spoken
+  replies, and transcription with zero key reads, request DOM construction,
+  serialization, or HTTP attempts; denied temporary audio is deleted. The wrapper
+  also rejects unapproved review. Counters live only in test stubs.
+- The Session API robustness test permits only explicitly supplied selected content (including a synthetic edited-list input) in the fake
+  request, excluding original/unselected candidates and later list mutations.
+  The production UI is selection-only and offers no text-editing route.
+  Empty, blank, oversized, duplicate, and stale approvals are rejected. Stale
+  approved tokens cannot construct payloads or read keys; late success/error and
+  queued completions are dropped after a replacement local review begins.
+- All ordinary transport fixtures use explicitly approved local review sessions.
 - Successful Chinese explanation and English reply routing; parts concatenate
   without exposing thought-marked parts; incomplete output is rejected.
 - HTTP 400, 401, 403, 429, 500, 502, and 503 stop after one attempt and do not read

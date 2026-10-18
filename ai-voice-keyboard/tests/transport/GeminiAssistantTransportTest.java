@@ -55,6 +55,14 @@ public final class GeminiAssistantTransportTest {
             if (args.length == 1 && "missing-key".equals(args[0])) {
                 testMissingKeyStaleCallback();
             } else {
+                testLocalReviewDenied(false);
+                testLocalReviewDenied(true);
+                testApprovedEditedPayload();
+                testInvalidAndStaleApproval();
+                testStaleApprovedToken();
+                testApprovedReviewLateCallback(200);
+                testApprovedReviewLateCallback(503);
+                testQueuedApprovedReviewInvalidated();
                 testSuccessfulExplanation();
                 testSuccessfulReplyAndThoughtFiltering();
                 for (int code : new int[] {400, 401, 403, 429, 500, 502, 503}) testHttpFailure(code);
@@ -90,6 +98,119 @@ public final class GeminiAssistantTransportTest {
             check(WORKER.awaitTermination(5, TimeUnit.SECONDS), "worker terminates");
         }
         System.out.println("PASS " + cases + " transport cases / " + checks + " checks (offline fake HTTP; no JSON parser claims)");
+    }
+
+    private static void testLocalReviewDenied(boolean captured) throws Exception {
+        begin();
+        Case test = new Case(false);
+        if (captured) captureCandidates(test);
+        int reads = SecureSettings.reads, payloads = JSONObject.serializations, objects = JSONObject.constructions;
+        test.request(null);
+        assertError(test, "会话");
+        Result replyResult = new Result();
+        test.transport.request(test.session, test.token, "SYNTHETIC-UNAPPROVED-REPLY", replyResult);
+        check(replyResult.count == 1 && replyResult.error != null && replyResult.english == null,
+                "local-only spoken reply denied");
+        Result wrapperResult = new Result();
+        AssistantGemini.explainVisible(test.transport, test.session, wrapperResult);
+        check(wrapperResult.count == 1 && wrapperResult.error != null, "wrapper denies local-only review");
+        Path audio = syntheticAudio(256);
+        try {
+            Result audioResult = new Result();
+            test.transport.transcribe(test.session, test.token, audio.toFile(), audioResult);
+            finishWorker(); Handler.drain();
+            check(audioResult.count == 1 && audioResult.error != null && audioResult.english == null,
+                    "local-only audio rejected without transcript");
+            check(!Files.exists(audio) && pending(test.transport, "pendingAudio") == null,
+                    "denied audio deleted and never retained");
+            check(SecureSettings.reads == reads, "local-only request and audio never read key");
+            check(JSONObject.serializations == payloads && JSONObject.constructions == objects,
+                    "local-only request and audio never construct or serialize payload");
+            check(!test.session.mayUseProvider(test.token) && test.session.visible(test.token).isEmpty(),
+                    "candidates never become provider context before approval");
+            end(0);
+        } finally { Files.deleteIfExists(audio); }
+    }
+
+    private static void captureCandidates(Case test) {
+        check(test.session.captureReview(test.token, AssistantSession.WHATSAPP, "SYNTHETIC-CHAT", true, true,
+                Arrays.asList("UNSELECTED-SYNTHETIC-SECRET", "ORIGINAL-SYNTHETIC-SELECTED")), "local candidates captured");
+    }
+
+    private static void testApprovedEditedPayload() throws Exception {
+        begin();
+        Case test = new Case(false); captureCandidates(test);
+        ArrayList<String> edited = new ArrayList<>(Collections.singletonList("EDITED-SYNTHETIC-APPROVED"));
+        check(test.session.approveReview(test.token, edited), "explicit edited selection approved");
+        edited.set(0, "MUTATED-AFTER-APPROVAL");
+        check(test.session.reviewCandidates(test.token).isEmpty(), "candidate list cleared after approval");
+        FakeConnection conn = NETWORK.enqueue(200, fixture("STOP", "Approved result."));
+        test.request(null); finishWorker(); Handler.drain();
+        String payload = conn.output.toString(StandardCharsets.UTF_8.name());
+        check(payload.contains("EDITED-SYNTHETIC-APPROVED"), "approved edit included in provider payload");
+        check(!payload.contains("UNSELECTED-SYNTHETIC-SECRET") && !payload.contains("ORIGINAL-SYNTHETIC-SELECTED")
+                && !payload.contains("MUTATED-AFTER-APPROVAL"), "unselected, original and later mutation excluded");
+        check(test.result.count == 1 && test.result.error == null, "approved selection request succeeds");
+        check(!test.session.approveReview(test.token, Collections.singletonList("REAPPROVED")), "duplicate approval rejected");
+        assertRequest(conn, MODELS[0]); end(1);
+    }
+
+    private static void testInvalidAndStaleApproval() throws Exception {
+        begin(); Case test = new Case(false);
+        check(!test.session.approveReview(test.token, Collections.singletonList("NO-CAPTURE")), "approval before capture denied");
+        captureCandidates(test);
+        check(!test.session.approveReview(test.token, Collections.emptyList()), "empty selection denied");
+        check(!test.session.approveReview(test.token, Arrays.asList("valid", "  ")), "blank selection denied atomically");
+        check(!test.session.approveReview(test.token, Collections.singletonList("x".repeat(3001))), "oversize approval denied");
+        check(!test.session.mayUseProvider(test.token) && test.session.visible(test.token).isEmpty(), "invalid approvals leave gate closed");
+        test.session.invalidate(); long replacement = test.session.start();
+        check(test.session.beginReview(replacement), "replacement enters local review");
+        check(test.session.captureReview(replacement, AssistantSession.WHATSAPP, "NEW-SYNTHETIC-CHAT", true, true,
+                Collections.singletonList("NEW-SYNTHETIC-CANDIDATE")), "new candidates captured");
+        check(!test.session.approveReview(test.token, Collections.singletonList("OLD-SYNTHETIC-APPROVAL")), "stale approval denied");
+        check(!test.session.mayUseProvider(replacement) && test.session.visible(replacement).isEmpty(), "stale approval cannot authorize replacement");
+        end(0);
+    }
+
+    private static void testStaleApprovedToken() throws Exception {
+        begin(); Case test = new Case(); test.session.invalidate(); test.session.start();
+        int reads = SecureSettings.reads, payloads = JSONObject.serializations, objects = JSONObject.constructions;
+        test.request(null);
+        Path audio = syntheticAudio(256);
+        try {
+            Result result = new Result();
+            test.transport.transcribe(test.session, test.token, audio.toFile(), result);
+            finishWorker(); Handler.drain();
+            check(test.result.count == 1 && test.result.error != null && result.count == 1 && result.error != null,
+                    "stale request and transcription rejected");
+            check(!Files.exists(audio), "stale transcription deletes audio");
+            check(SecureSettings.reads == reads && JSONObject.serializations == payloads && JSONObject.constructions == objects, "stale token cannot read key or construct payload");
+            end(0);
+        } finally { Files.deleteIfExists(audio); }
+    }
+
+    private static void testApprovedReviewLateCallback(int status) throws Exception {
+        begin(); Case test = new Case();
+        NETWORK.enqueue(status, fixture("STOP", "OLD-SYNTHETIC-RESULT"));
+        test.request(null); finishWorker();
+        check(Handler.pendingCount() == 1, "approved completion queued");
+        long replacement = test.session.start(); check(test.session.beginReview(replacement), "new local review started");
+        Handler.drain();
+        check(test.result.count == 0 && !test.session.mayUseProvider(replacement), "late success/error dropped in replacement local review");
+        end(1);
+    }
+
+    private static void testQueuedApprovedReviewInvalidated() throws Exception {
+        begin();
+        try (WorkerGate gate = new WorkerGate()) {
+            Case test = new Case(); test.request(null);
+            int payloads = JSONObject.serializations;
+            long replacement = test.session.start(); test.session.beginReview(replacement);
+            gate.release(); finishWorker(); Handler.drain();
+            check(test.result.count == 0 && JSONObject.serializations == payloads,
+                    "queued approved request cannot serialize or deliver after replacement review");
+            end(0);
+        }
     }
 
     private static void testSuccessfulExplanation() throws Exception {
@@ -447,9 +568,15 @@ public final class GeminiAssistantTransportTest {
         final long token = session.start();
         final GeminiAssistantTransport transport = new GeminiAssistantTransport(new Context());
         final Result result = new Result();
-        Case() {
-            check(session.capture(token, AssistantSession.WHATSAPP, "SYNTHETIC-CHAT", true, true,
-                    Collections.singletonList("Synthetic only: are you free tomorrow?")), "synthetic context accepted");
+        Case() { this(true); }
+        Case(boolean approve) {
+            check(session.beginReview(token), "synthetic session enters local review");
+            if (approve) {
+                check(session.captureReview(token, AssistantSession.WHATSAPP, "SYNTHETIC-CHAT", true, true,
+                        Collections.singletonList("Synthetic only: are you free tomorrow?")), "synthetic local candidates accepted");
+                check(session.approveReview(token, Collections.singletonList("Synthetic only: are you free tomorrow?")),
+                        "synthetic explicit selection approved");
+            }
         }
         void request(String spoken) { transport.request(session, token, spoken, result); }
     }
