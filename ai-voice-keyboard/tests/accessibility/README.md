@@ -46,7 +46,7 @@ network connection, signing, installation, or publishing is involved.
   These summary assertions run on both the metadata-only and ordinary
   empty-capture paths.
 
-The suite currently passes 1,304 assertions over 39 scenarios.
+The suite currently passes 1,971 assertions over 45 scenarios.
 
 ## Mutation/regression check
 
@@ -92,3 +92,11 @@ as a generic View is accepted. It cannot establish the actual runtime type:
 an independently composed surface may inherit that same reported class. The
 test is evidence of this limitation, not a safety guarantee for such a surface.
 See LAYER_ORDER_FIX.md for the supported ordinary-layout trust boundary.
+
+## Per-gate diagnostic regression
+
+The service suite now asserts the generated version label and fixed per-gate LCA
+reasons and category details. It distinguishes previously identical DP/UN
+reports and compares diagnostic versus ordinary rejected-capture classification.
+Pure path/geometry cases unreachable through normal collection are covered by
+AssistantGateDiagnosticsTest, not misrepresented as device/service scenarios.

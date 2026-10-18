@@ -8,7 +8,7 @@ import shutil
 import subprocess
 
 PACKAGE = 'com.airnovation.aivoicekeyboard.assistanttest'
-VERSION_NAME = '0.15-layered-visibility-isolated-test'
+VERSION_NAME = '0.16-gate-diagnostics-isolated-test'
 LABEL = 'AI Voice Keyboard - Isolated Test'
 
 def validate(badging, signer, commit, run_id):
@@ -16,7 +16,7 @@ def validate(badging, signer, commit, run_id):
     if len(package_lines) != 1:
         raise ValueError('Expected exactly one APK package declaration')
     fields = dict(re.findall(r"([A-Za-z]+)='([^']*)'", package_lines[0]))
-    if fields.get('name') != PACKAGE or fields.get('versionCode') != '15' or fields.get('versionName') != VERSION_NAME:
+    if fields.get('name') != PACKAGE or fields.get('versionCode') != '16' or fields.get('versionName') != VERSION_NAME:
         raise ValueError('Unexpected package/version')
     labels = re.findall(r"^application-label(?:-[^:]+)?:'([^']*)'$", badging, re.M)
     if not labels or any(label != LABEL for label in labels):
@@ -31,7 +31,7 @@ def validate(badging, signer, commit, run_id):
         raise ValueError('APK signature verification not confirmed')
     if not re.fullmatch(r'[0-9a-f]{40}', commit) or not re.fullmatch(r'[1-9][0-9]*', run_id):
         raise ValueError('Invalid immutable build identity')
-    return {'package': PACKAGE, 'versionCode': '15', 'versionName': VERSION_NAME,
+    return {'package': PACKAGE, 'versionCode': '16', 'versionName': VERSION_NAME,
             'label': LABEL, 'certificate_sha256': certs[0][1].lower(),
             'commit': commit, 'run_id': run_id,
             'tag': 'isolated-assistant-test-' + commit[:12] + '-' + run_id}

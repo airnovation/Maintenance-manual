@@ -21,7 +21,7 @@ public final class AssistantCaptureDiagnosticsTest {
         check(new AssistantCaptureDiagnostics().recognized == 0);
         check(d.metadataResult(99).contains("N=99"));
         check(d.metadataResult(99).contains("未读取消息文字、未联网"));
-        check(d.metadataResult(99).contains("只截图这块数字区域"));
+        check(d.metadataResult(99).contains("请只复制"));
         check(!d.metadataResult(99).contains("T="));
         var box = new AssistantNodeFilter.Box(0, 0, 100, 100);
         AssistantCaptureDiagnostics low = new AssistantCaptureDiagnostics();

@@ -27,7 +27,9 @@ assert service.index('if (metadataOnly) continue;') < service.index('CharSequenc
 assert service.index('if (metadataOnly) return fail(diagnostics.metadataResult(visited[0]));') < service.index('if (!session.capture(')
 assert 'return connected.capture(token, false, true);' in service
 assert 'finally { AssistantSession.INSTANCE.invalidate(); }' in service
-assert 'AssistantNodeFilter.unobscuredInHierarchy(' in service
+assert 'AssistantNodeFilter.assess(' in service
+assert 'diagnostics.assessment(assessment);' in service
+assert 'boolean unobscured = assessment.allowed;' in service
 assert 'visited[0] >= 250' in service
 assert 'AssistantSession.isResource(pkg, id, "entry")' in service
 assert 'AssistantSession.isResource(pkg, id, "message_text")' in service

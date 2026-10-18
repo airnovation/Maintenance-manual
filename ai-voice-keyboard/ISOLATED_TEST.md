@@ -1,3 +1,22 @@
+## v0.16: comprehensive local gate diagnostics
+
+Reading decisions are unchanged from v15. The same classifier now supplies
+capture and diagnosis, with fixed rejection reasons, category/path/order
+validity, and the actual build version in a single selectable result line.
+This is diagnosis, not a claim that the phone's reading failure is repaired.
+
+No Gemini key is needed. Replace only the old Isolated Test app, preserve the
+original keyboard, enable the new test keyboard and its Accessibility service.
+In the WhatsApp Business message input, tap “启动助手” once to expand controls,
+then “本机诊断（不读文字）”. Copy the entire line beginning “版本：”, including
+LCA and category codes, back to the assistant. Natural screen wrapping is fine.
+Do not send the chat screenshot and do not tap “同意并读取” for this test.
+
+This approved release has a fresh ephemeral development certificate and cannot
+update the preceding test APK in place. No automatic uninstall is performed.
+Only the test app needs replacement. Private signing material is removed in CI.
+See GATE_DIAGNOSTICS.md for reason meanings, bounded detail limits and privacy.
+
 ## v0.15: bounded Android drawing-order visibility fix
 
 This build uses reported ancestor-branch drawing order to avoid treating an

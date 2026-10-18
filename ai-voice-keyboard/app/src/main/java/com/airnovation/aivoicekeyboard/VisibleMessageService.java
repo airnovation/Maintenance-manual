@@ -150,7 +150,7 @@ public final class VisibleMessageService extends AccessibilityService {
             List<AssistantNodeFilter.Region> sameWindowMasks = new ArrayList<>();
             boolean[] editorFound = {false};
             List<String> messages = new ArrayList<>();
-            AssistantCaptureDiagnostics diagnostics = new AssistantCaptureDiagnostics();
+            AssistantCaptureDiagnostics diagnostics = new AssistantCaptureDiagnostics(BuildConfig.VERSION_NAME);
             int[] visited = {0};
             try {
                 collect(root, sourcePackage, viewport, occlusions, found, sameWindowMasks, new ArrayList<>(), new ArrayList<>(), false, editorFound, visited, diagnostics);
@@ -159,7 +159,10 @@ public final class VisibleMessageService extends AccessibilityService {
                 diagnostics.candidates = found.size();
                 found.sort(Comparator.comparingInt((NodeText n) -> n.top).thenComparingInt(n -> n.left));
                 for (NodeText node : found) {
-                    boolean unobscured = AssistantNodeFilter.unobscuredInHierarchy(box(node.bounds), box(node.clip), node.ancestors, node.path, sameWindowMasks);
+                    AssistantNodeFilter.Assessment assessment = AssistantNodeFilter.assess(
+                            box(node.bounds), box(node.clip), node.ancestors, node.path, sameWindowMasks);
+                    diagnostics.assessment(assessment);
+                    boolean unobscured = assessment.allowed;
                     // Only after both clipping and known same-window overlap checks, access message text.
                     if (!unobscured) {
                         diagnostics.sameWindowOverlap++;
@@ -204,7 +207,7 @@ public final class VisibleMessageService extends AccessibilityService {
             boolean[] editorFound, int[] visited, AssistantCaptureDiagnostics diagnostics) {
         int nodeId = ++visited[0];
         List<AssistantNodeFilter.Layer> path = new ArrayList<>(parentPath);
-        path.add(new AssistantNodeFilter.Layer(nodeId, safeDrawingOrder(node), supportedDrawingClass(node)));
+        path.add(drawingLayer(nodeId, node));
         if (nodeId > 250 || !node.isVisibleToUser()) return;
         Rect bounds = new Rect(); node.getBoundsInScreen(bounds);
         if (bounds.isEmpty() || !Rect.intersects(ancestorClip, bounds)) return;
@@ -261,6 +264,23 @@ public final class VisibleMessageService extends AccessibilityService {
                 || "android.widget.ListView".equals(clazz) || "android.widget.ScrollView".equals(clazz)
                 || "androidx.recyclerview.widget.RecyclerView".equals(clazz)
                 || "android.support.v7.widget.RecyclerView".equals(clazz);
+    }
+    private static AssistantNodeFilter.Layer drawingLayer(int id, AccessibilityNodeInfo node) {
+        int order=0; boolean error=false;
+        try { order=node.getDrawingOrder(); } catch (RuntimeException ignored) { error=true; }
+        String name=node.getClassName()==null ? "" : node.getClassName().toString();
+        AssistantNodeFilter.Kind kind;
+        if (name.isEmpty()) kind=AssistantNodeFilter.Kind.MISSING;
+        else if ("android.view.View".equals(name)) kind=AssistantNodeFilter.Kind.VIEW;
+        else if ("android.widget.TextView".equals(name)) kind=AssistantNodeFilter.Kind.TEXT;
+        else if ("android.widget.ImageView".equals(name)) kind=AssistantNodeFilter.Kind.IMAGE;
+        else if ("android.view.SurfaceView".equals(name) || "android.view.TextureView".equals(name)) kind=AssistantNodeFilter.Kind.SURFACE;
+        else if ("android.widget.ListView".equals(name) || "android.widget.ScrollView".equals(name)
+                || "androidx.recyclerview.widget.RecyclerView".equals(name)
+                || "android.support.v7.widget.RecyclerView".equals(name)) kind=AssistantNodeFilter.Kind.LIST;
+        else if (supportedDrawingClass(node)) kind=AssistantNodeFilter.Kind.LAYOUT;
+        else kind=AssistantNodeFilter.Kind.OTHER;
+        return new AssistantNodeFilter.Layer(id,order,supportedDrawingClass(node),kind,error);
     }
     private static int safeDrawingOrder(AccessibilityNodeInfo node) {
         try { return node.getDrawingOrder(); } catch (RuntimeException ignored) { return 0; }

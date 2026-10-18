@@ -2,6 +2,35 @@ package com.airnovation.aivoicekeyboard;
 
 /** Local counters only. Never accepts text, resource-ID strings, names, packages or Android node objects. */
 final class AssistantCaptureDiagnostics {
+    private final String version;
+    AssistantCaptureDiagnostics() { this("host-test"); }
+    AssistantCaptureDiagnostics(String version) { this.version=version; }
+    private final int[] gates=new int[AssistantNodeFilter.Reason.values().length];
+    private final java.util.LinkedHashMap<String,Integer> gateDetails=new java.util.LinkedHashMap<>();
+    private int omittedDetails;
+    void assessment(AssistantNodeFilter.Assessment result) {
+        for (AssistantNodeFilter.Decision d:result.decisions) {
+            gates[d.reason.ordinal()]++;
+            String key=d.reason+" B="+d.maskBranch+"/"+d.messageBranch
+                    +" U="+d.maskClass+"/"+d.messageClass
+                    +" Q="+d.maskOrder+"/"+d.messageOrder
+                    +" P="+d.maskPath+"/"+d.messagePath;
+            if (gateDetails.containsKey(key)) gateDetails.put(key,gateDetails.get(key)+1);
+            else if (gateDetails.size()<4) gateDetails.put(key,1);
+            else omittedDetails++;
+        }
+    }
+    private String gateSummary() {
+        StringBuilder out=new StringBuilder("版本："+version+" | LCA：");
+        boolean any=false;
+        for (AssistantNodeFilter.Reason reason:AssistantNodeFilter.Reason.values())
+            if (gates[reason.ordinal()]>0) { out.append(reason).append('=').append(gates[reason.ordinal()]).append(' '); any=true; }
+        if (!any) out.append(candidates==0 ? "NOT_EVALUATED" : "NO_OVERLAP");
+        for (java.util.Map.Entry<String,Integer> e:gateDetails.entrySet())
+            out.append(" | ").append(e.getKey()).append(" N=").append(e.getValue());
+        if (omittedDetails>0) out.append(" | DETAIL_LIMIT=").append(omittedDetails);
+        return out.toString();
+    }
     int reportedIds, missingIds, listContainers;
     int recognized, noList, clipped, externalOverlap, sizeMismatch;
     int candidates, sameWindowOverlap, missingText, eligible;
@@ -48,7 +77,7 @@ final class AssistantCaptureDiagnostics {
     }
     String metadataResult(int visited) {
         return "本机诊断完成，未读取消息文字、未联网。\n"
-                + counts(visited) + "\n" + overlapSummary() + "\n请只截图这块数字区域，不用包含上方聊天。数字不含消息、联系人或群名，不会自动上传。";
+                + counts(visited) + "\n" + overlapSummary() + "\n" + gateSummary() + "\n请只复制“版本：”这一整行给我（可自动换行），不用截图聊天。仅本机代号，不含消息或群名，不会自动上传。";
     }
     private String counts(int visited) {
         return "N=" + visited + " M=" + recognized + " L=" + noList
@@ -62,6 +91,6 @@ final class AssistantCaptureDiagnostics {
                 + " I=" + reportedIds + " U=" + missingIds + " K=" + listContainers
                 + " C=" + clipped + " W=" + externalOverlap + " S=" + sizeMismatch
                 + " F=" + candidates + " O=" + sameWindowOverlap + " T=" + missingText
-                + "\n" + overlapSummary() + "\n这些数字仅在本机显示，不含消息、联系人或群名，不会自动上传。";
+                + "\n" + overlapSummary() + "\n" + gateSummary() + "\n这些数字仅在本机显示，不含消息、联系人或群名，不会自动上传。";
     }
 }

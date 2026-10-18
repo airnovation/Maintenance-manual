@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import verify_isolated_test as verify
 
-BADGING = "package: name='com.airnovation.aivoicekeyboard.assistanttest' versionCode='15' versionName='0.15-layered-visibility-isolated-test'\napplication-label:'AI Voice Keyboard - Isolated Test'\n"
+BADGING = "package: name='com.airnovation.aivoicekeyboard.assistanttest' versionCode='16' versionName='0.16-gate-diagnostics-isolated-test'\napplication-label:'AI Voice Keyboard - Isolated Test'\n"
 SIGNER = 'Verifies\nNumber of signers: 1\nSigner #1 certificate SHA-256 digest: ' + 'ab' * 32 + '\n'
 COMMIT = '1234567890abcdef1234567890abcdef12345678'
 
@@ -21,7 +21,7 @@ class VerificationTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.validate(BADGING.replace('.assistanttest', ''))
 
     def test_wrong_version_code(self):
-        with self.assertRaises(ValueError): self.validate(BADGING.replace("versionCode='15'", "versionCode='11'"))
+        with self.assertRaises(ValueError): self.validate(BADGING.replace("versionCode='16'", "versionCode='11'"))
 
     def test_wrong_version_name(self):
         with self.assertRaises(ValueError): self.validate(BADGING.replace('-isolated-test', ''))
