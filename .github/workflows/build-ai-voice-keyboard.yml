@@ -10,10 +10,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: ai-voice-keyboard-distribution
+  cancel-in-progress: false
 
 jobs:
-  android:
+  verify:
+    name: Compile and test without signing credentials
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,16 +28,50 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install Android SDK packages using GitHub runner SDK
+      - name: Install Android SDK packages
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+          # Use only licenses already accepted on the hosted runner.
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" </dev/null
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - name: Configure optional stable test signing
+      - name: Test safety logic and signing metadata gates
+        working-directory: ai-voice-keyboard
+        run: |
+          sh tests/run-tests.sh
+          python3 -m unittest discover -s tests -p test_distribution.py
+          python3 -m unittest discover -s tools -p test_user_setup_signing.py
+      - name: Compile, lint, and build unsigned release
+        working-directory: ai-voice-keyboard
+        run: gradle :app:compileDebugJavaWithJavac :app:lintDebug :app:assembleRelease --no-daemon
+      # No APK upload: unsigned validation is never presented as installable.
+  distribute:
+    name: Sign and distribute verified build
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK packages using GitHub runner SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          # Do not blanket-accept new licenses. Runner SDK licenses must already be approved.
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" </dev/null
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Require approved stable signing
         env:
           AE_KEYSTORE_BASE64: ${{ secrets.AE_KEYSTORE_BASE64 }}
           AE_STORE_PASSWORD: ${{ secrets.AE_STORE_PASSWORD }}
@@ -45,35 +84,42 @@ jobs:
             echo "AE_SIGNING_FILE=$RUNNER_TEMP/ai-voice-signing.jks" >> "$GITHUB_ENV"
             echo "Stable test signing supplied."
           else
-            echo "::warning::Stable signing secrets are not configured. This debug APK likely cannot overwrite a previous runner-signed build."
+            echo "::error::Stable signing configuration is required; no APK will be distributed."
+            exit 1
           fi
-      - name: Build APK (optional stable signing)
+      - name: Build APK with stable signing
         env:
           AE_STORE_PASSWORD: ${{ secrets.AE_STORE_PASSWORD }}
           AE_KEY_ALIAS: ${{ secrets.AE_KEY_ALIAS }}
           AE_KEY_PASSWORD: ${{ secrets.AE_KEY_PASSWORD }}
         run: gradle -p ai-voice-keyboard :app:assembleDebug --no-daemon --stacktrace
-      - name: Upload installable debug APK
+      - name: Verify distribution identity and version
+        id: distribution
+        env:
+          EXPECTED_SIGNING_CERT_SHA256: ${{ vars.AE_SIGNING_CERT_SHA256 }}
+        run: python3 ai-voice-keyboard/scripts/verify_distribution.py
+      - name: Upload verified APK and public metadata
         uses: actions/upload-artifact@v4
         with:
-          name: ai-voice-keyboard-debug-apk
-          path: ai-voice-keyboard/app/build/outputs/apk/debug/app-debug.apk
+          name: ai-voice-keyboard-${{ steps.distribution.outputs.version }}
+          path: |
+            ai-voice-keyboard/app/build/outputs/apk/debug/app-debug.apk
+            distribution-metadata.txt
           if-no-files-found: error
           retention-days: 14
-
-      - name: Publish v0.10 test download
-        # Keep the normal Actions artifact even if release publishing is unavailable.
-        continue-on-error: true
+      - name: Publish new version without replacing prior assets
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.distribution.outputs.tag }}
+          VERSION: ${{ steps.distribution.outputs.version }}
         run: |
-          TAG=ai-voice-keyboard-v0.10-test
-          APK=ai-voice-keyboard/app/build/outputs/apk/debug/app-debug.apk
-          test -s "$APK"
-          cp "$APK" AI-Voice-Keyboard-v0.10-test.apk
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --target "$GITHUB_SHA" --title "AI Voice Keyboard v0.10 (TEST)" --notes "Compact voice/EN translation keyboard with natural WhatsApp English, safe Undo and return-to-previous-keyboard button. Does not send messages. Review results in WhatsApp. Test build; not production signed. Android may require uninstalling the prior debug build if its signing certificate differs. Back up your API key before uninstalling." --prerelease
-          fi
-          gh release upload "$TAG" AI-Voice-Keyboard-v0.10-test.apk --clobber
-          echo "Direct test download: https://github.com/${GH_REPO}/releases/download/${TAG}/AI-Voice-Keyboard-v0.10-test.apk"
+          set -euo pipefail
+          APK="AI-Voice-Keyboard-${VERSION}.apk"
+          cp ai-voice-keyboard/app/build/outputs/apk/debug/app-debug.apk "$APK"
+          sha256sum "$APK" > "$APK.sha256"
+          # gh release create fails if the tag already has a release. Never clobber.
+          gh release create "$TAG" "$APK" "$APK.sha256" distribution-metadata.txt \
+            --target "$GITHUB_SHA" --title "AI Voice Keyboard ${VERSION} (TEST)" \
+            --notes "Stable-signed test build. Public version, commit and certificate metadata are attached. Existing installations can update only when their signing identity is compatible. Device upgrade testing is still required." \
+            --prerelease

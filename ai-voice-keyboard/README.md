@@ -1,3 +1,14 @@
+# Local assistant candidate (unpublished)
+
+This review-only candidate is based on commit f36f5e27cc0f763dbfac7857cf7f5e6e7bdf767f
+(v0.10). Its local version is 0.11-assistant-prototype / versionCode 11.
+It is NOT an APK release and has not been Android-built or phone-tested.
+See ASSISTANT_PROTOTYPE.md for scope, safety gates, tests, and remaining work.
+
+## Historical v0.10 baseline documentation
+
+The following section describes the unmodified v0.10 release, not the optional assistant added by this local candidate. Do not follow its release/install instructions for this unbuilt candidate.
+
 # AI Voice Keyboard — Android prototype
 
 **Status:** v0.10 experimental test build. Safe Undo and return-to-previous keyboard added; phone validation still required. Removes the standalone Pinyin keyboard in favor of the user's preferred Samsung/Gboard input method. Retains Mic and EN; both AI providers are instructed to produce concise, natural WhatsApp English. Changes require on-device validation. Code kept on `prototype/ai-voice-keyboard` branch of an existing Airnovation repository. This is a temporary location, not production infrastructure.
