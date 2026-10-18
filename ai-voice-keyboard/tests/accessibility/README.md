@@ -34,19 +34,19 @@ network connection, signing, installation, or publishing is involved.
   `N=25 M=2 L=0 I=22 U=3 K=1 C=0 W=0 S=1 F=1 O=1 T=0`.
   One has a large background-like `android.view.View` sibling; the other has a
   small corner-overlapping `android.widget.TextView` sibling. Their declared
-  drawing orders are respectively below and above the message. Both execute
+  drawing orders are respectively unknown (zero) and above the message. Both execute
   metadata diagnostics and ordinary rejected capture with every text getter
   still poisoned and untouched. This shows the old aggregate counters cannot
   uniquely identify the overlapping UI element; it does not identify a real
   device's layout or establish actual opacity or z-order.
 
   The extended diagnostic summary must distinguish these fixtures with
-  `SP=1 LO=1 VIEW=1 BIG=1` versus `SP=1 HI=1 TEXT=1 SM=1`, while both remain
+  `SP=1 UN=1 VIEW=1 BIG=1` versus `SP=1 HI=1 TEXT=1 SM=1`, while both remain
   refused (`O=1`, `E=0`) and neither exposes raw class names or resource IDs.
   These summary assertions run on both the metadata-only and ordinary
   empty-capture paths.
 
-The suite currently passes 431 assertions over 11 scenarios.
+The suite currently passes 1,304 assertions over 39 scenarios.
 
 ## Mutation/regression check
 
@@ -69,6 +69,26 @@ window reporting, actual app resource IDs, or physical visibility semantics.
 `obtain` returns the same fixture node and `recycle` is a no-op, so getter counters
 remain shared. This is a host-side control-flow/privacy regression suite, not
 Android instrumentation or a claim of real-device/WhatsApp layout validation.
-The root test runner is deliberately unchanged; run this suite separately.
+The root test runner includes this suite.
 
 A throwing drawing-order getter is classified as unknown, preserves refusal, and never prints exception details.
+
+
+## Local LCA candidate regressions
+
+The new tests cover a lower background branch with different immediate parents,
+a foreground branch, equal/zero/negative/throwing branch order, contradictory
+leaf versus ancestor order, unknown/unsupported classes, explicit SurfaceView
+and TextureView, and nonleaf/image/text masks. Every other overlapping mask
+still participates. A missing advertised child rejects both diagnostic and
+ordinary capture before any message getter. Clipping and external-window rules
+remain active even for a lower branch.
+
+Metadata diagnostics retain poisoned text getters. Normal allowed capture
+reads only the synthetic message, never the editor or background node.
+
+A deliberate trust-boundary case demonstrates that a low branch **reported**
+as a generic View is accepted. It cannot establish the actual runtime type:
+an independently composed surface may inherit that same reported class. The
+test is evidence of this limitation, not a safety guarantee for such a surface.
+See LAYER_ORDER_FIX.md for the supported ordinary-layout trust boundary.

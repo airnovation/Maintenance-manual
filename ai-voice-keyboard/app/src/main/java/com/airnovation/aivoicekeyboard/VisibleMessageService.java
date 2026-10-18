@@ -153,13 +153,13 @@ public final class VisibleMessageService extends AccessibilityService {
             AssistantCaptureDiagnostics diagnostics = new AssistantCaptureDiagnostics();
             int[] visited = {0};
             try {
-                collect(root, sourcePackage, viewport, occlusions, found, sameWindowMasks, new ArrayList<>(), false, editorFound, visited, diagnostics);
+                collect(root, sourcePackage, viewport, occlusions, found, sameWindowMasks, new ArrayList<>(), new ArrayList<>(), false, editorFound, visited, diagnostics);
                 if (visited[0] >= 250) return fail("页面节点过多，无法完整检查遮挡；未读取消息。");
                 if (!editorFound[0]) return fail("未识别当前WhatsApp/Business消息输入框。请点聊天底部输入框；搜索或未知版本布局不读取。");
                 diagnostics.candidates = found.size();
                 found.sort(Comparator.comparingInt((NodeText n) -> n.top).thenComparingInt(n -> n.left));
                 for (NodeText node : found) {
-                    boolean unobscured = AssistantNodeFilter.unobscured(box(node.bounds), box(node.clip), node.ancestors, sameWindowMasks);
+                    boolean unobscured = AssistantNodeFilter.unobscuredInHierarchy(box(node.bounds), box(node.clip), node.ancestors, node.path, sameWindowMasks);
                     // Only after both clipping and known same-window overlap checks, access message text.
                     if (!unobscured) {
                         diagnostics.sameWindowOverlap++;
@@ -200,9 +200,11 @@ public final class VisibleMessageService extends AccessibilityService {
     }
     private String fail(String reason) { session.invalidate(); return reason; }
     private void collect(AccessibilityNodeInfo node, String sourcePackage, Rect ancestorClip, List<Rect> occlusions,
-            List<NodeText> out, List<AssistantNodeFilter.Region> sameWindowMasks, List<Integer> ancestors, boolean insideConversation,
+            List<NodeText> out, List<AssistantNodeFilter.Region> sameWindowMasks, List<Integer> ancestors, List<AssistantNodeFilter.Layer> parentPath, boolean insideConversation,
             boolean[] editorFound, int[] visited, AssistantCaptureDiagnostics diagnostics) {
         int nodeId = ++visited[0];
+        List<AssistantNodeFilter.Layer> path = new ArrayList<>(parentPath);
+        path.add(new AssistantNodeFilter.Layer(nodeId, safeDrawingOrder(node), supportedDrawingClass(node)));
         if (nodeId > 250 || !node.isVisibleToUser()) return;
         Rect bounds = new Rect(); node.getBoundsInScreen(bounds);
         if (bounds.isEmpty() || !Rect.intersects(ancestorClip, bounds)) return;
@@ -211,7 +213,7 @@ public final class VisibleMessageService extends AccessibilityService {
         if (!childClip.intersect(bounds)) return;
         String pkg = node.getPackageName() == null ? "" : node.getPackageName().toString();
         if (!sourcePackage.equals(pkg) || !AssistantSession.isWhatsApp(pkg)) return;
-        if (node.isPassword()) { sameWindowMasks.add(mask(nodeId, node, bounds, ancestors)); return; }
+        if (node.isPassword()) { sameWindowMasks.add(mask(nodeId, node, bounds, ancestors, path)); return; }
         String id = node.getViewIdResourceName();
         String clazz = node.getClassName() == null ? "" : node.getClassName().toString();
         boolean knownList = "android.widget.ListView".equals(clazz)
@@ -223,7 +225,7 @@ public final class VisibleMessageService extends AccessibilityService {
         boolean unobscured = true;
         for (Rect covered : occlusions) if (Rect.intersects(bounds, covered)) { unobscured = false; break; }
         if (node.isEditable()) {
-            sameWindowMasks.add(mask(nodeId, node, bounds, ancestors));
+            sameWindowMasks.add(mask(nodeId, node, bounds, ancestors, path));
             if (fullyInside && unobscured && AssistantSession.isResource(pkg, id, "entry") && node.isFocused()) editorFound[0] = true;
             return; // Never read the existing typed draft through Accessibility.
         }
@@ -235,23 +237,35 @@ public final class VisibleMessageService extends AccessibilityService {
         if (message) node.getBoundsInParent(localBounds);
         boolean originalSize = !message || AssistantNodeFilter.sameUnclippedSize(box(bounds), box(localBounds));
         if (message) diagnostics.candidate(inList, fullyInside, unobscured, originalSize);
-        // Treat every overlapping non-ancestor UI region as potential same-window occlusion.
-        // Transparent/lower-layer siblings may cause conservative refusal rather than a hidden read.
-        if (!message) sameWindowMasks.add(mask(nodeId, node, bounds, ancestors));
+        // Keep every potential mask. The final pass can discount only a leaf reported as View
+        // whose divergent ancestor branch is explicitly ordered below the message.
+        if (!message) sameWindowMasks.add(mask(nodeId, node, bounds, ancestors, path));
         if (inList && AssistantNodeFilter.allowed(pkg, id, true, false, false, fullyInside && unobscured && originalSize))
-            out.add(new NodeText(bounds, ancestorClip, ancestors, AccessibilityNodeInfo.obtain(node), safeDrawingOrder(node)));
+            out.add(new NodeText(bounds, ancestorClip, ancestors, AccessibilityNodeInfo.obtain(node), safeDrawingOrder(node), path));
         List<Integer> childAncestors = new ArrayList<>(ancestors); childAncestors.add(nodeId);
         for (int i = 0; i < node.getChildCount() && visited[0] < 250; i++) {
             AccessibilityNodeInfo child = node.getChild(i);
-            if (child != null) try {
-                collect(child, sourcePackage, childClip, occlusions, out, sameWindowMasks, childAncestors, inList, editorFound, visited, diagnostics);
+            if (child == null) throw new IllegalStateException("Incomplete accessibility hierarchy");
+            try {
+                collect(child, sourcePackage, childClip, occlusions, out, sameWindowMasks, childAncestors, path, inList, editorFound, visited, diagnostics);
             } finally { child.recycle(); }
         }
+    }
+    // A reported-class allowlist for the normal WhatsApp View hierarchy, not runtime
+    // type/pixel proof: custom delegates and independently composed layers can differ.
+    private static boolean supportedDrawingClass(AccessibilityNodeInfo node) {
+        String clazz = node.getClassName() == null ? "" : node.getClassName().toString();
+        return "android.view.View".equals(clazz) || "android.view.ViewGroup".equals(clazz)
+                || "android.widget.FrameLayout".equals(clazz) || "android.widget.LinearLayout".equals(clazz)
+                || "android.widget.RelativeLayout".equals(clazz) || "android.widget.TextView".equals(clazz)
+                || "android.widget.ListView".equals(clazz) || "android.widget.ScrollView".equals(clazz)
+                || "androidx.recyclerview.widget.RecyclerView".equals(clazz)
+                || "android.support.v7.widget.RecyclerView".equals(clazz);
     }
     private static int safeDrawingOrder(AccessibilityNodeInfo node) {
         try { return node.getDrawingOrder(); } catch (RuntimeException ignored) { return 0; }
     }
-    private static AssistantNodeFilter.Region mask(int id, AccessibilityNodeInfo node, Rect bounds, List<Integer> ancestors) {
+    private static AssistantNodeFilter.Region mask(int id, AccessibilityNodeInfo node, Rect bounds, List<Integer> ancestors, List<AssistantNodeFilter.Layer> path) {
         int kind = 0;
         String clazz = node.getClassName() == null ? "" : node.getClassName().toString();
         if (node.isPassword() || node.isEditable()) kind = 6;
@@ -261,15 +275,16 @@ public final class VisibleMessageService extends AccessibilityService {
         else if ("android.widget.ImageView".equals(clazz)) kind = 2;
         else if ("android.view.View".equals(clazz)) kind = 3;
         int parent = ancestors.isEmpty() ? -1 : ancestors.get(ancestors.size() - 1);
-        return new AssistantNodeFilter.Region(id, box(bounds), parent, safeDrawingOrder(node), kind);
+        return new AssistantNodeFilter.Region(id, box(bounds), parent, safeDrawingOrder(node), kind, path);
     }
     private static final class NodeText {
+        final List<AssistantNodeFilter.Layer> path;
         final int top, left, parentId, drawingOrder; final Rect bounds, clip; final List<Integer> ancestors; final AccessibilityNodeInfo node;
-        NodeText(Rect bounds, Rect clip, List<Integer> ancestors, AccessibilityNodeInfo node, int drawingOrder) {
+        NodeText(Rect bounds, Rect clip, List<Integer> ancestors, AccessibilityNodeInfo node, int drawingOrder, List<AssistantNodeFilter.Layer> path) {
             this.top = bounds.top; this.left = bounds.left; this.bounds = new Rect(bounds);
             this.clip = new Rect(clip); this.ancestors = new ArrayList<>(ancestors); this.node = node;
             this.parentId = ancestors.isEmpty() ? -1 : ancestors.get(ancestors.size() - 1);
-            this.drawingOrder = drawingOrder;
+            this.drawingOrder = drawingOrder; this.path = new ArrayList<>(path);
         }
     }
     private static AssistantNodeFilter.Box box(Rect bounds) {

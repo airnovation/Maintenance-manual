@@ -1,3 +1,20 @@
+## v0.15: bounded Android drawing-order visibility fix
+
+This build uses reported ancestor-branch drawing order to avoid treating an
+explicitly lower ordinary leaf View as a foreground obstruction. Unknown,
+equal or higher branch order remains blocked. It preserves the message-ID,
+editor, clipping, external-window and session checks.
+
+This trusts the ordinary foreground WhatsApp/Business accessibility hierarchy,
+not final screen pixels. Independently composed or custom surfaces can report
+generic View metadata; see LAYER_ORDER_FIX.md. Device success is not yet verified.
+
+Replace only the old Isolated Test app because this approved release uses a
+fresh ephemeral development certificate. Keep the original keyboard installed.
+For normal assistant use, configure Gemini on the device and explicitly start
+the assistant in a WhatsApp/Business message editor. Local diagnostics still
+need no Gemini key and never read message text.
+
 ## v0.14: content-free overlap relationship diagnostics
 
 This adds bounded category counts to the existing “本机诊断（不读文字）” action. It distinguishes same/different parent, relative drawing order, reported element category and overlap-area band. Only nonzero fixed codes and numbers are displayed. The diagnostic never reads message text or screenshots. Raw resource IDs, names and coordinates are not displayed, stored or uploaded; existing node metadata is used locally only to calculate the fixed categories. Capture and visibility decisions are unchanged. This is still a diagnosis, not a claim that message reading has been repaired.

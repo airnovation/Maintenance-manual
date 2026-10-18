@@ -63,6 +63,7 @@ public final class VisibleMessageServiceTest {
         }
     }
     private static void assertNoTextReads(AccessibilityNodeInfo node) {
+        if (node==null) return; // A null advertised child is asserted separately as a refusal.
         check(node.textCalls==0, "Diagnostic/rejected node text read: "+node.resourceId);
         for (AccessibilityNodeInfo child:node.children) assertNoTextReads(child);
     }
@@ -141,10 +142,10 @@ public final class VisibleMessageServiceTest {
         for (String line:output.split("\\n"))
             if (line.startsWith("遮挡关系：")) summary=line.substring("遮挡关系：".length()).trim();
         check(summary!=null, "Actual service must include overlap metadata");
-        String expected=backgroundLike ? "SP=1 LO=1 VIEW=1 BIG=1" : "SP=1 HI=1 TEXT=1 SM=1";
+        String expected=backgroundLike ? "SP=1 UN=1 VIEW=1 BIG=1" : "SP=1 HI=1 TEXT=1 SM=1";
         check(expected.equals(summary), "Unexpected overlap metadata: "+summary);
         equalCounter(summary,"SP",1);
-        equalCounter(summary,backgroundLike ? "LO" : "HI",1);
+        equalCounter(summary,backgroundLike ? "UN" : "HI",1);
         equalCounter(summary,backgroundLike ? "VIEW" : "TEXT",1);
         equalCounter(summary,backgroundLike ? "BIG" : "SM",1);
         check(!output.contains("synthetic_background") && !output.contains("synthetic_corner_label"), "Do not expose raw resource IDs");
@@ -162,7 +163,9 @@ public final class VisibleMessageServiceTest {
                     : node("synthetic_corner_label","android.widget.TextView",570,280,620,320);
             // These explicit host fixtures differ in geometry, class, and sibling order.
             // Neither the class nor drawing order establishes actual visual opacity.
-            mask.drawingOrder=backgroundLike ? 1 : 3;
+            // Preserve the historical signature with unknown background order.
+            // Positive lower-order backgrounds have a separate eligible regression.
+            mask.drawingOrder=backgroundLike ? 0 : 3;
             f.list.children.add(mask);
             for (int i=0; i<19; i++) {
                 AccessibilityNodeInfo filler=node(i<17 ? "synthetic_structure_"+i : null,
@@ -235,10 +238,181 @@ public final class VisibleMessageServiceTest {
             scenarios++;
         }
     }
+    private static void assertOnlyMessageRead(AccessibilityNodeInfo node, AccessibilityNodeInfo message) {
+        check(node.textCalls==(node==message ? 1 : 0), "Only the allowed message may be read: "+node.resourceId);
+        for (AccessibilityNodeInfo child:node.children) assertOnlyMessageRead(child,message);
+    }
+    private static void assertNormalOutcome(Fixture f, boolean eligible, String label) {
+        if (eligible) f.message.allowText=true;
+        long token=AssistantSession.INSTANCE.start();
+        String result=VisibleMessageService.captureOnce(token);
+        if (eligible) {
+            check(result==null, label+" should capture: "+result);
+            check(AssistantSession.INSTANCE.active(), label+" capture should keep session");
+            check(AssistantSession.INSTANCE.visible(token).equals(Arrays.asList("SYNTHETIC MESSAGE")), label+" stores only the fixture message");
+            assertOnlyMessageRead(f.root,f.message);
+        } else {
+            check(result!=null && result.contains("未采集到"), label+" must be refused: "+result);
+            check(!AssistantSession.INSTANCE.active(), label+" rejected capture ends session");
+            check(AssistantSession.INSTANCE.visible(token).isEmpty(), label+" leaves no captured text");
+            assertNoTextReads(f.root);
+        }
+        check(result==null || !result.contains("SYNTHETIC_ORDER_ERROR"), "Exception content must not be exposed");
+    }
+    private static AccessibilityNodeInfo[] hierarchy(Fixture f, String maskClass, int maskOrder,
+            int branchOrder, int messageOrder, boolean nonleaf) {
+        AccessibilityNodeInfo wrapper=node("synthetic_message_branch","android.widget.FrameLayout",0,100,1080,1500);
+        wrapper.drawingOrder=branchOrder;
+        f.message.drawingOrder=messageOrder;
+        f.list.children.clear(); wrapper.children.add(f.message); f.list.children.add(wrapper);
+        AccessibilityNodeInfo mask=node("synthetic_hierarchy_mask",maskClass,100,210,300,250);
+        mask.drawingOrder=maskOrder; f.list.children.add(mask);
+        if (nonleaf) {
+            AccessibilityNodeInfo child=node("synthetic_hidden_child","android.view.View",100,210,300,250);
+            child.visible=false; mask.children.add(child);
+        }
+        return new AccessibilityNodeInfo[]{wrapper,mask};
+    }
+    private static void hierarchyCase(String label, String maskClass, int maskOrder, int branchOrder,
+            int messageOrder, boolean nonleaf, int throwsAt, boolean eligible, String expectedKind) {
+        try (Fixture f=new Fixture()) {
+            AccessibilityNodeInfo[] nodes=hierarchy(f,maskClass,maskOrder,branchOrder,messageOrder,nonleaf);
+            if (throwsAt==1) nodes[0].throwDrawingOrder=true;
+            if (throwsAt==2) nodes[1].throwDrawingOrder=true;
+            if (throwsAt==3) f.message.throwDrawingOrder=true;
+            String out=f.diagnose();
+            equalCounter(out,"M",1); equalCounter(out,"F",1);
+            equalCounter(out,"O",eligible ? 0 : 1); equalCounter(out,"E",eligible ? 1 : 0);
+            check(!out.contains("SYNTHETIC_ORDER_ERROR"), "Throwing order lookup must not leak its exception");
+            if (!eligible) {
+                // Existing relation summary intentionally calls different-parent order unknown.
+                // It must not pretend that immediate leaf orders are LCA branch orders.
+                check(out.contains("遮挡关系：DP=1 UN=1 "+expectedKind+"=1 MID=1"), label+" diagnostic categories: "+out);
+            }
+            assertNormalOutcome(f,eligible,label);
+            scenarios++;
+            System.out.println("PASS hierarchy "+label+": "+(eligible ? "diagnostic E=1 with no text; capture reads only message" : "O=1 E=0; no diagnostic/capture text read"));
+        }
+    }
+    private static void genericReportedViewTrustBoundary() {
+        try (Fixture f=new Fixture()) {
+            f.message.drawingOrder=2;
+            AccessibilityNodeInfo mask=node("synthetic_background","android.view.View",0,100,1080,1500);
+            mask.drawingOrder=1; f.list.children.add(mask);
+            String out=f.diagnose();
+            equalCounter(out,"F",1); equalCounter(out,"O",0); equalCounter(out,"E",1);
+            assertNormalOutcome(f,true,"plain reported lower sibling View");
+            // This fixture exposes ONLY a generic View report. The service has no
+            // independent runtime-type or compositor-opacity observation. Admission
+            // therefore cannot establish that a real hidden SurfaceView is safe.
+            System.out.println("PASS trust-boundary demonstration: lower reported generic View is admitted; actual type/opacity is not proved");
+            scenarios++;
+        }
+    }
+    private static void lowerMaskCannotBypassClipping() {
+        try (Fixture f=new Fixture()) {
+            hierarchy(f,"android.view.View",1,2,10,false);
+            f.message.bounds=new Rect(20,80,600,180);
+            String out=f.diagnose();
+            equalCounter(out,"C",1); equalCounter(out,"F",0); equalCounter(out,"E",0);
+            assertNormalOutcome(f,false,"lower branch cannot bypass clipping"); scenarios++;
+        }
+    }
+    private static void lowerMaskCannotBypassExternalWindow() {
+        try (Fixture f=new Fixture()) {
+            hierarchy(f,"android.view.View",1,2,10,false);
+            AccessibilityWindowInfo overlay=new AccessibilityWindowInfo();
+            overlay.id=8; overlay.type=AccessibilityWindowInfo.TYPE_SYSTEM; overlay.layer=2;
+            overlay.focused=false; overlay.active=false; overlay.bounds=new Rect(100,210,300,250);
+            f.service.fixtureWindows.add(overlay);
+            String out=f.diagnose();
+            equalCounter(out,"W",1); equalCounter(out,"F",0); equalCounter(out,"E",0);
+            assertNormalOutcome(f,false,"lower branch cannot bypass external occlusion");
+            check(overlay.rootCalls==0,"External root must never be read"); scenarios++;
+        }
+    }
+    private static void separateMaskContainerRemainsBlocked() {
+        try (Fixture f=new Fixture()) {
+            AccessibilityNodeInfo[] nodes=hierarchy(f,"android.view.View",1,3,99,false);
+            f.list.children.remove(nodes[1]);
+            AccessibilityNodeInfo maskBranch=node("synthetic_mask_branch","android.widget.FrameLayout",100,210,300,250);
+            maskBranch.drawingOrder=1; maskBranch.children.add(nodes[1]); f.list.children.add(maskBranch);
+            String out=f.diagnose();
+            equalCounter(out,"O",1); equalCounter(out,"E",0); equalCounter(out,"BOX",1);
+            assertNormalOutcome(f,false,"overlapping nonleaf mask container"); scenarios++;
+        }
+    }
+    private static void unsupportedMessagePath(String label, String reportedClass, boolean messageLeaf) {
+        try (Fixture f=new Fixture()) {
+            AccessibilityNodeInfo[] nodes=hierarchy(f,"android.view.View",1,2,99,false);
+            if (messageLeaf) f.message.className=reportedClass;
+            else nodes[0].className=reportedClass;
+            String out=f.diagnose();
+            equalCounter(out,"F",1); equalCounter(out,"O",1); equalCounter(out,"E",0);
+            assertNormalOutcome(f,false,label);
+            scenarios++;
+            System.out.println("PASS unsupported divergent message path "+label+": O=1 E=0; no text read");
+        }
+    }
+    private static void missingChildRefusesIncompleteHierarchy() {
+        try (Fixture f=new Fixture()) {
+            // A candidate is discovered before the advertised null child. The
+            // service must finish validating the tree before invoking its getter.
+            f.list.children.add(null);
+            long token=AssistantSession.INSTANCE.start();
+            String diagnostic=VisibleMessageService.diagnose(token);
+            check(diagnostic!=null && diagnostic.contains("当前页面无法可靠读取"), "Incomplete tree must fail diagnostic safely");
+            check(!diagnostic.contains("本机诊断完成"), "Incomplete tree is not a complete metadata report");
+            check(!diagnostic.contains("Exception"), "Do not expose hierarchy exceptions");
+            check(!AssistantSession.INSTANCE.active(), "Incomplete diagnostic ends session");
+            check(AssistantSession.INSTANCE.visible(token).isEmpty(), "Incomplete diagnostic stores no text");
+            assertNoTextReads(f.root);
+            token=AssistantSession.INSTANCE.start();
+            String capture=VisibleMessageService.captureOnce(token);
+            check(capture!=null && capture.contains("当前页面无法可靠读取"), "Incomplete tree must fail normal capture safely");
+            check(!capture.contains("Exception"), "Do not expose capture exception");
+            check(!AssistantSession.INSTANCE.active(), "Incomplete normal capture ends session");
+            check(AssistantSession.INSTANCE.visible(token).isEmpty(), "Incomplete capture stores no text");
+            assertNoTextReads(f.root);
+            scenarios++;
+            System.out.println("PASS missing advertised child: both paths refuse before candidate getText; session invalidated");
+        }
+    }
+    private static void lcaHierarchyCases() {
+        genericReportedViewTrustBoundary(); missingChildRefusesIncompleteHierarchy();
+        hierarchyCase("different parents, lower LCA branch","android.view.View",1,2,99,false,0,true,"VIEW");
+        hierarchyCase("different parents, higher LCA branch","android.view.View",3,2,1,false,0,false,"VIEW");
+        hierarchyCase("equal LCA order","android.view.View",2,2,99,false,0,false,"VIEW");
+        hierarchyCase("zero mask branch order","android.view.View",0,2,99,false,0,false,"VIEW");
+        hierarchyCase("missing message branch order","android.view.View",1,0,99,false,0,false,"VIEW");
+        hierarchyCase("negative mask branch order","android.view.View",-1,2,99,false,0,false,"VIEW");
+        hierarchyCase("throwing message branch order","android.view.View",1,2,99,false,1,false,"VIEW");
+        hierarchyCase("throwing mask branch order","android.view.View",1,2,99,false,2,false,"VIEW");
+        hierarchyCase("contradictory low message leaf, higher ancestor","android.view.View",2,3,1,false,0,true,"VIEW");
+        hierarchyCase("contradictory high message leaf, lower ancestor","android.view.View",2,1,99,false,0,false,"VIEW");
+        hierarchyCase("unused deeper leaf order missing","android.view.View",1,2,0,false,0,true,"VIEW");
+        hierarchyCase("unused deeper leaf order throws","android.view.View",1,2,99,false,3,true,"VIEW");
+        hierarchyCase("reported SurfaceView below","android.view.SurfaceView",1,2,99,false,0,false,"SURFACE");
+        hierarchyCase("reported TextureView below","android.view.TextureView",1,2,99,false,0,false,"SURFACE");
+        hierarchyCase("nonleaf View below","android.view.View",1,2,99,true,0,false,"BOX");
+        hierarchyCase("TextView below","android.widget.TextView",1,2,99,false,0,false,"TEXT");
+        hierarchyCase("ImageView below","android.widget.ImageView",1,2,99,false,0,false,"IMAGE");
+        hierarchyCase("other reported class below","example.CustomOverlay",1,2,99,false,0,false,"OTHER");
+        unsupportedMessagePath("custom ancestor","example.CustomContainer",false);
+        unsupportedMessagePath("reported Surface ancestor","android.view.SurfaceView",false);
+        unsupportedMessagePath("reported Texture ancestor","android.view.TextureView",false);
+        unsupportedMessagePath("custom message class","example.CustomText",true);
+        unsupportedMessagePath("missing reported class",null,true);
+        separateMaskContainerRemainsBlocked();
+        lowerMaskCannotBypassClipping(); lowerMaskCannotBypassExternalWindow();
+        // This validates reported Android metadata only. A real opaque surface
+        // misreported as a generic leaf View is outside this fixture's knowledge.
+        // Passing these host tests is not proof of pixel-level visibility.
+    }
     public static void main(String[] args) {
         unavailableDrawingOrder(); eligibleMetadata(); unsupportedList(); clippedMessage(); externalOverlay();
         sameWindowOverlay(); screenClippedSize(); normalCaptureControl(); invalidTokenEndsSession();
-        sameCountersDifferentMasks();
+        sameCountersDifferentMasks(); lcaHierarchyCases();
         System.out.println("PASS "+checks+" checks across "+scenarios+" actual VisibleMessageService scenarios (host fakes; no Android/device verification)");
     }
 }
