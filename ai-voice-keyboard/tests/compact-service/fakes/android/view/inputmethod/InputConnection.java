@@ -1,0 +1,2 @@
+package android.view.inputmethod;
+public interface InputConnection { boolean finishComposingText(); ExtractedText getExtractedText(ExtractedTextRequest request, int flags); boolean beginBatchEdit(); boolean endBatchEdit(); boolean setSelection(int start, int end); boolean commitText(CharSequence value,int position); CharSequence getSelectedText(int flags); boolean deleteSurroundingTextInCodePoints(int before, int after); }

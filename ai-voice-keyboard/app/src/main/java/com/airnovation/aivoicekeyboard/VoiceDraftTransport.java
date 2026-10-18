@@ -68,7 +68,7 @@ public final class VoiceDraftTransport {
         try {
             check(operation);
             String key = SecureSettings.getApiKey(context, "gemini");
-            if (key.isEmpty()) throw new SafeFailure("请先在现有键盘设置保存Gemini API Key。");
+            ApiKeyValidation.requireValid(key);
             JSONObject transcription;
             try { transcription = buildTranscription(readAudio(operation)); }
             finally { delete(operation.audio); }
@@ -87,6 +87,7 @@ public final class VoiceDraftTransport {
             check(operation);
         } catch (Cancelled ignored) { return; }
         catch (SafeFailure failure) { error = failure.getMessage(); draft = null; }
+        catch (SafeApiErrors.Failure failure) { error = SafeApiErrors.message(failure); draft = null; }
         catch (Exception ignored) { error = "Gemini请求未完成，请检查网络或重新录音。"; draft = null; }
         finally {
             operation.cleanup();

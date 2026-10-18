@@ -7,12 +7,9 @@ import android.util.Base64;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -26,6 +23,7 @@ import java.util.concurrent.Executors;
  * Caller must delete the private temporary file after completion.
  */
 public final class AudioTranscriber {
+    private static final int MAX_AUDIO_BYTES = 12 * 1024 * 1024;
     private static final ExecutorService IO = Executors.newSingleThreadExecutor();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final String[] GEMINI_MODELS = {
@@ -38,23 +36,22 @@ public final class AudioTranscriber {
         IO.execute(() -> {
             String text = null, error = null;
             try {
+                ApiKeyValidation.requireValid(apiKey);
                 if (audio == null || !audio.isFile() || audio.length() < 100) {
-                    throw new Exception("No recording. Please tap Mic, speak, then tap Stop.");
+                    throw SafeApiErrors.failure(SafeApiErrors.Kind.NO_RECORDING);
                 }
-                if (apiKey == null || apiKey.trim().isEmpty()) {
-                    throw new Exception("Select and save your Gemini or OpenAI API key first.");
-                }
-                if (audio.length() > 12 * 1024 * 1024) {
-                    throw new Exception("Recording is too large; try a shorter message.");
+                if (audio.length() > MAX_AUDIO_BYTES) {
+                    throw SafeApiErrors.failure(SafeApiErrors.Kind.AUDIO_TOO_LARGE);
                 }
                 text = "gemini".equals(provider)
                         ? transcribeGemini(apiKey, audio)
                         : transcribeOpenAi(apiKey, audio);
                 if (text == null || text.trim().isEmpty()) {
-                    throw new Exception("No speech recognised. Try again.");
+                    throw SafeApiErrors.failure(SafeApiErrors.Kind.EMPTY_TRANSCRIPT);
                 }
             } catch (Exception e) {
-                error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                text = null;
+                error = SafeApiErrors.message(e);
             } finally {
                 if (audio != null && audio.exists()) {
                     // A message never becomes a persisted recording in the app.
@@ -90,6 +87,7 @@ public final class AudioTranscriber {
                 URL endpoint = new URL("https://generativelanguage.googleapis.com/v1beta/models/"
                         + model + ":generateContent");
                 connection = (HttpURLConnection) endpoint.openConnection();
+                connection.setInstanceFollowRedirects(false);
                 connection.setRequestMethod("POST");
                 connection.setDoOutput(true);
                 connection.setConnectTimeout(15000);
@@ -98,31 +96,29 @@ public final class AudioTranscriber {
                 connection.setRequestProperty("Content-Type", "application/json");
                 try (OutputStream output = connection.getOutputStream()) { output.write(payload); }
                 int code = connection.getResponseCode();
-                String response = readStream(code < 300 ? connection.getInputStream()
-                        : connection.getErrorStream());
                 if (code == 404) continue;
-                if (code < 200 || code >= 300) {
-                    throw new Exception("Gemini transcription HTTP " + code + " (" +
-                            coarseError(response) + ").");
-                }
+                if (code < 200 || code >= 300) throw SafeApiErrors.http(code);
+                String response = SafeApiErrors.readResponse(connection.getInputStream());
                 JSONObject result = new JSONObject(response);
                 JSONArray candidates = result.optJSONArray("candidates");
                 if (candidates == null || candidates.length() == 0)
-                    throw new Exception("Gemini returned no transcription.");
+                    throw SafeApiErrors.failure(SafeApiErrors.Kind.INVALID_RESPONSE);
                 JSONObject candidate = candidates.optJSONObject(0);
+                if (candidate == null || !"STOP".equals(candidate.optString("finishReason", "")))
+                    throw SafeApiErrors.failure(SafeApiErrors.Kind.INVALID_RESPONSE);
                 JSONObject outputContent = candidate == null ? null : candidate.optJSONObject("content");
                 JSONArray resultParts = outputContent == null ? null : outputContent.optJSONArray("parts");
                 StringBuilder text = new StringBuilder();
                 if (resultParts != null) for (int i = 0; i < resultParts.length(); i++) {
                     JSONObject item = resultParts.optJSONObject(i);
-                    if (item != null) text.append(item.optString("text", ""));
+                    if (item != null && !item.optBoolean("thought", false)) text.append(item.optString("text", ""));
                 }
                 return text.toString().trim();
             } finally {
                 if (connection != null) connection.disconnect();
             }
         }
-        throw new Exception("Gemini transcription unavailable (HTTP 404 on available models).");
+        throw SafeApiErrors.failure(SafeApiErrors.Kind.MODELS_UNAVAILABLE);
     }
 
     private static String transcribeOpenAi(String key, File audio) throws Exception {
@@ -131,6 +127,7 @@ public final class AudioTranscriber {
         try {
             connection = (HttpURLConnection) new URL("https://api.openai.com/v1/audio/transcriptions")
                     .openConnection();
+            connection.setInstanceFollowRedirects(false);
             connection.setRequestMethod("POST");
             connection.setConnectTimeout(15000);
             connection.setReadTimeout(65000);
@@ -145,11 +142,8 @@ public final class AudioTranscriber {
                 write(output, "\r\n--" + boundary + "--\r\n");
             }
             int status = connection.getResponseCode();
-            String response = readStream(status < 300 ? connection.getInputStream()
-                    : connection.getErrorStream());
-            if (status < 200 || status >= 300)
-                throw new Exception("OpenAI transcription HTTP " + status + " (" +
-                        coarseError(response) + ").");
+            if (status < 200 || status >= 300) throw SafeApiErrors.http(status);
+            String response = SafeApiErrors.readResponse(connection.getInputStream());
             return new JSONObject(response).optString("text", "").trim();
         } finally {
             if (connection != null) connection.disconnect();
@@ -165,29 +159,12 @@ public final class AudioTranscriber {
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             byte[] chunk = new byte[16384];
             int n;
-            while ((n = in.read(chunk)) != -1) out.write(chunk, 0, n);
+            while ((n = in.read(chunk)) != -1) {
+                if (out.size() + n > MAX_AUDIO_BYTES) throw SafeApiErrors.failure(SafeApiErrors.Kind.AUDIO_TOO_LARGE);
+                out.write(chunk, 0, n);
+            }
             return out.toByteArray();
         }
     }
 
-    private static String readStream(InputStream in) throws Exception {
-        if (in == null) return "";
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(in, StandardCharsets.UTF_8))) {
-            StringBuilder result = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) result.append(line);
-            return result.toString();
-        }
-    }
-
-    private static String coarseError(String response) {
-        // Never display raw provider error text: it may contain credential-like data.
-        try {
-            JSONObject err = new JSONObject(response).optJSONObject("error");
-            String kind = err == null ? "" : err.optString("status", err.optString("type", ""));
-            if (kind.matches("[A-Za-z_]{2,48}")) return kind;
-        } catch (Exception ignored) { }
-        return "UNKNOWN";
-    }
 }

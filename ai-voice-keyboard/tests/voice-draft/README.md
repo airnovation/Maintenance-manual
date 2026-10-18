@@ -33,7 +33,7 @@ a real keystore, or a provider SDK.
 
 ## Coverage
 
-The suite has 64 scenarios and 763 assertions:
+The suite has 75 scenarios and 853 assertions:
 
 - Per-panel RAM state, fresh-start clearing, explicit revision retaining only its
   accepted draft, stale token rejection, invalidation clearing, and atomic bounds
@@ -64,6 +64,7 @@ The suite has 64 scenarios and 763 assertions:
   simulated; this does not prove wall-clock behavior of Android networking.
 - 2 MiB audio bounds, 64 KiB response-byte bounds (including UTF-8), 3,000-character
   transcript and 4,000-character draft bounds, file cleanup, and closed streams.
+- Local API-key validation rejects null, malformed, whitespace/control/non-ASCII and copied diagnostic input before HTTP; a synthetic header exception cannot expose the key.
 - Stale entry, queued invalidation, missing-key late callbacks, cancel during
   either stage, cancel after posting a result, invalidation before output,
   between stages or before 404 fallback, and replacement-operation races.

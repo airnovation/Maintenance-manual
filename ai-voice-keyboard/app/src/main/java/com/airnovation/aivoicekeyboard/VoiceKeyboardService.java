@@ -1,598 +1,498 @@
 package com.airnovation.aivoicekeyboard;
 
-import android.Manifest;
+import android.app.KeyguardManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.res.ColorStateList;
-import android.graphics.Color;
 import android.content.Intent;
-import android.content.pm.PackageManager;
+import android.content.IntentFilter;
+import android.content.res.ColorStateList;
 import android.inputmethodservice.InputMethodService;
-import android.os.Bundle;
-import android.media.MediaRecorder;
-import android.os.Handler;
-import android.os.Looper;
 import android.os.Build;
-import java.io.File;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.view.View;
+import android.view.WindowInsets;
 import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.ExtractedText;
 import android.view.inputmethod.ExtractedTextRequest;
+import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import java.io.File;
 
-/** Voice-first input method. No automatic messaging or background conversation reading. */
+/** Compact voice-to-input. No background host text reading or automatic sending. */
 public class VoiceKeyboardService extends InputMethodService {
-    private VoiceDraftPanel assistantPanel;
-    private final VoiceEditorBinding voiceEditorBinding = new VoiceEditorBinding();
+    private enum Phase { IDLE, RECORDING, PROCESSING, TRANSLATING, INSERTING }
+    private static final String IDLE_TEXT = "Mic：说内容、语气；Stop整理并填入。\n默认英文，可说“用中文”；发送由你操作。";
+    private static final int MAX_TYPED_CHARS = 8000;
+    private final VoiceDraftSession session = new VoiceDraftSession();
+    private final VoiceEditorBinding editorBinding = new VoiceEditorBinding();
+    private VoiceDraftTransport transport;
+    private AssistantRecorder recorder;
     private TextView status;
-    private EditText preview;
-    private Button mic;
-    private Button improve;
-    private Button insert;
-    private Button undo;
-    // Only hold undo data in RAM for the current input field.
-    private String undoBefore;
-    private String undoAfter;
-    private MediaRecorder recorder;
-    private File recordingFile;
-    private long recordStarted;
-    private boolean recording = false;
-    private boolean processingAudio = false;
-    private boolean sensitiveField = false;
-    private int generation = 0;
-    private boolean translating = false;
-    private static final long MAX_RECORD_MS = 3 * 60 * 1000L;
-    private final Handler handler = new Handler(Looper.getMainLooper());
-    private final Runnable stopAtLimit = () -> {
-        if (recording) {
-            finishRecording();
-            if (status != null) status.setText("Maximum recording length reached. Processing audio…");
+    private Button mic, improve, delete;
+    private Phase phase = Phase.IDLE;
+    private long generation, voiceToken = -1;
+    private boolean registered, destroyed;
+    private final VoiceEditorBinding selectionBinding = new VoiceEditorBinding();
+    private long selectionEpoch, selectionVersion, voiceSelectionVersion;
+    private int selectionStart = -1, selectionEnd = -1, composingStart = -1, composingEnd = -1;
+    private int voiceCursor = -1;
+    private boolean finishingVoiceComposition;
+    private final BroadcastReceiver screenOff = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            reset("录音及草稿已清除。未确认的录音不会上传。");
         }
     };
 
-    // Never create Android's landscape extracted-text editor for this voice-first UI.
+    // Keep Android's extracted full-screen editor out of this compact keyboard.
     @Override public boolean onEvaluateFullscreenMode() { return false; }
 
     @Override public View onCreateInputView() {
+        reset(IDLE_TEXT);
+        if (transport == null) transport = new VoiceDraftTransport(this);
+        if (recorder == null) recorder = new AssistantRecorder(this,
+                () -> reset("录音达到60秒上限，已取消且未上传。请重新录音。"));
+        if (!registered) {
+            IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenOff, filter, Context.RECEIVER_NOT_EXPORTED);
+            else registerReceiver(screenOff, filter);
+            registered = true;
+        }
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        int pad = (int) (getResources().getDisplayMetrics().density * 12);
+        int pad = Math.round(getResources().getDisplayMetrics().density * 12);
         root.setPadding(pad, pad, pad, pad * 2);
-        // Android 15 may draw the IME behind the system navigation bar.
+        root.setBackgroundColor(0xfff1f2f4);
+        root.setSaveEnabled(false);
+        root.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         root.setOnApplyWindowInsetsListener((view, insets) -> {
-            int bottom = android.os.Build.VERSION.SDK_INT >= 30
-                    ? insets.getInsets(android.view.WindowInsets.Type.navigationBars()).bottom
+            int bottom = Build.VERSION.SDK_INT >= 30
+                    ? insets.getInsets(WindowInsets.Type.navigationBars()).bottom
                     : insets.getSystemWindowInsetBottom();
-            view.setPadding(pad, pad, pad, pad * 2 + bottom);
+            view.setPadding(pad, pad, pad, Math.max(pad * 2, bottom + pad));
             return insets;
         });
-        root.setBackgroundColor(0xfff1f2f4);
-
-        if (assistantPanel != null) assistantPanel.destroy();
-        assistantPanel = new VoiceDraftPanel(this, () -> recording || processingAudio || translating,
-                this::beginVoiceEditor, this::voiceEditorCurrent, this::insertVoiceDraft);
-        assistantPanel.addTo(root);
-        bindVoiceEditor(getCurrentInputEditorInfo());
 
         status = new TextView(this);
         status.setTextSize(15);
         status.setTextColor(0xff202020);
-        status.setText("Mic / Stop: voice. EN: translate text from your regular keyboard.");
+        status.setMaxLines(2);
+        status.setEllipsize(TextUtils.TruncateAt.END);
+        status.setSaveEnabled(false);
         root.addView(status);
-        status.setVisibility(View.GONE);
 
-        // Keep every action above the preview, away from the phone's bottom navigation bar.
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(row);
-        row.setVisibility(View.GONE);
-
-        mic = makeButton(row, "Mic", () -> toggleRecording());
-        improve = makeButton(row, "EN", () -> translate());
-        undo = makeButton(row, "Undo", () -> undoLastTranslation());
-        undo.setEnabled(false);
-        insert = makeButton(row, "Insert", () -> insertText());
-        insert.setVisibility(View.GONE); // Emergency fallback only when auto-insert fails.
+        mic = makeButton(row, "Mic", this::toggleRecording);
+        improve = makeButton(row, "EN", this::translate);
 
         LinearLayout other = new LinearLayout(this);
         other.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(other);
-        makeButton(other, "旧版", () -> {
-            boolean expand = row.getVisibility() != View.VISIBLE;
-            row.setVisibility(expand ? View.VISIBLE : View.GONE);
-            status.setVisibility(expand ? View.VISIBLE : View.GONE);
-        });
-        makeButton(other, "⌫ Delete", () -> deleteFromChatInput());
+        delete = makeButton(other, "⌫ Delete", this::deleteFromChatInput);
         makeButton(other, "↩ Keyboard", () -> {
-            if (assistantPanel != null) assistantPanel.stop();
-            // Android 9+ can return directly to the most recently used keyboard.
+            reset(IDLE_TEXT); // Cancel before switching, even if Android cannot switch immediately.
             boolean switched = Build.VERSION.SDK_INT >= 28 && switchToPreviousInputMethod();
             if (!switched) {
-                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                if (imm != null) imm.showInputMethodPicker();
+                InputMethodManager manager = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (manager != null) manager.showInputMethodPicker();
             }
         });
-        preview = new EditText(this);
-        preview.setTextSize(16);
-        preview.setSingleLine(false);
-        preview.setMinLines(2);
-        preview.setMaxLines(3);
-        preview.setHint("Translation fallback");
-        preview.setBackgroundColor(Color.WHITE);
-        preview.setTextColor(Color.BLACK);
-        preview.setHintTextColor(0xff666666);
-        preview.setPadding(pad, pad, pad, pad);
-        root.addView(preview, new LinearLayout.LayoutParams(-1, -2));
-        preview.setVisibility(View.GONE);
 
-        applySensitiveState();
+        showStatus(editorAllowed(getCurrentInputEditorInfo()) ? IDLE_TEXT : unavailableEditor());
+        updateButtons();
         return root;
     }
 
     private Button makeButton(LinearLayout row, String title, Runnable click) {
-        Button b = new Button(this);
-        b.setText(title);
-        b.setAllCaps(false);
-        b.setTextColor(0xff111111);
-        b.setBackgroundTintList(ColorStateList.valueOf(0xffd7e2ef));
-        row.addView(b, new LinearLayout.LayoutParams(0, -2, 1f));
-        b.setOnClickListener(v -> click.run());
-        return b;
+        Button button = new Button(this);
+        button.setText(title);
+        button.setAllCaps(false);
+        button.setTextColor(0xff111111);
+        button.setBackgroundTintList(ColorStateList.valueOf(0xffd7e2ef));
+        row.addView(button, new LinearLayout.LayoutParams(0, -2, 1f));
+        button.setOnClickListener(view -> click.run());
+        return button;
     }
 
-
-    @Override public void onStartInput(EditorInfo attribute, boolean restarting) {
-        super.onStartInput(attribute, restarting);
-        generation++;
-        discardRecording();
-        processingAudio = false;
-        translating = false;
-        clearUndo();
-        sensitiveField = isSensitive(attribute);
-        bindVoiceEditor(attribute);
-        if (preview != null) preview.setText("");
-        if (insert != null) insert.setVisibility(View.GONE);
-        if (preview != null) preview.setVisibility(View.GONE);
-        applySensitiveState();
+    private static boolean editorAllowed(EditorInfo info) {
+        if (info == null || info.packageName == null || info.packageName.isEmpty()
+                || (info.inputType & InputType.TYPE_MASK_CLASS) != InputType.TYPE_CLASS_TEXT) return false;
+        int variation = info.inputType & InputType.TYPE_MASK_VARIATION;
+        return variation != InputType.TYPE_TEXT_VARIATION_PASSWORD
+                && variation != InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                && variation != InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD;
     }
 
-    @Override public void onStartInputView(EditorInfo info, boolean restarting) {
-        super.onStartInputView(info, restarting);
-        sensitiveField = isSensitive(info);
-        bindVoiceEditor(info);
-        applySensitiveState();
+    private boolean editorAvailable() {
+        KeyguardManager keyguard = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+        return !destroyed && editorAllowed(getCurrentInputEditorInfo()) && isInputViewShown()
+                && getCurrentInputConnection() != null && keyguard != null && !keyguard.isKeyguardLocked();
     }
 
-    private boolean isSensitive(EditorInfo info) {
-        if (info == null) return false;
-        int type = info.inputType;
-        int clazz = type & InputType.TYPE_MASK_CLASS;
-        int variation = type & InputType.TYPE_MASK_VARIATION;
-        if (clazz == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD) return true;
-        if (clazz != InputType.TYPE_CLASS_TEXT) return false;
-        return variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
-                variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
-                variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD;
+    private boolean bindEditor() {
+        if (!editorAvailable()) return false;
+        EditorInfo info = getCurrentInputEditorInfo();
+        editorBinding.bind(generation, info.packageName, info.fieldId, info.inputType,
+                getCurrentInputConnection(), true);
+        return editorCurrent();
     }
 
-    private void applySensitiveState() {
-        if (mic != null) mic.setEnabled(!sensitiveField && !processingAudio && !translating);
-        if (improve != null) improve.setEnabled(!sensitiveField && !processingAudio && !recording);
-        if (insert != null) insert.setEnabled(!sensitiveField && !processingAudio && !translating && !recording);
-        if (undo != null) undo.setEnabled(!sensitiveField && !processingAudio && !translating && !recording && undoAfter != null);
-        if (preview != null) preview.setEnabled(!sensitiveField);
-        if (status != null) status.setText(sensitiveField
-                ? "Sensitive field: voice & AI disabled. Switch to a trusted keyboard."
-                : "旧版快捷键：Mic自动翻译填入 · EN整理已输入文字 · Undo撤销");
+    private boolean editorCurrent() {
+        if (!editorAvailable()) return false;
+        EditorInfo info = getCurrentInputEditorInfo();
+        return editorBinding.matches(generation, info.packageName, info.fieldId, info.inputType,
+                getCurrentInputConnection());
     }
 
-    /**
-     * Manual start/stop: never use SpeechRecognizer's silence-based end detection.
-     * Audio stays in private app cache until Stop is pressed, then is sent to
-     * the user's selected provider for transcription and deleted.
-     */
-    private void toggleRecording() {
-        if (assistantPanel != null) assistantPanel.stop();
-        if (recording) {
-            finishRecording();
-            return;
-        }
-        if (sensitiveField || processingAudio || translating) return;
-        String provider = selectedProvider();
-        String key = SecureSettings.getApiKey(this, provider);
-        if (key.isEmpty()) {
-            status.setText("Set up " + ("gemini".equals(provider) ? "Gemini" : "OpenAI")
-                    + " API key in app settings for manual recording.");
-            return;
-        }
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            status.setText("Allow microphone access from the AI Voice Keyboard app.");
-            return;
-        }
-        discardRecording();
-        try {
-            File file = File.createTempFile("voice_segment_", ".m4a", getCacheDir());
-            recordingFile = file;
-            MediaRecorder newRecorder = new MediaRecorder();
-            recorder = newRecorder;
-            newRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-            newRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-            newRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-            newRecorder.setAudioEncodingBitRate(64000);
-            newRecorder.setAudioSamplingRate(16000);
-            newRecorder.setOutputFile(file.getAbsolutePath());
-            newRecorder.prepare();
-            newRecorder.start();
-            recordStarted = android.os.SystemClock.elapsedRealtime();
-            recording = true;
-            generation++;
-            // Every new Mic session starts a fresh message; no need to press Clear.
-            if (preview != null) preview.setText("");
-            if (insert != null) insert.setVisibility(View.GONE);
-            mic.setText("Stop");
-            improve.setEnabled(false);
-            insert.setEnabled(false);
-            status.setText("Recording… speak naturally. Tap Stop when finished.");
-            handler.postDelayed(stopAtLimit, MAX_RECORD_MS);
-        } catch (Exception e) {
-            discardRecording();
-            status.setText("Could not start microphone (" + e.getClass().getSimpleName()
-                    + "). Check permissions and other apps using the mic.");
-        }
+    private boolean voiceCurrent(long token) {
+        if (destroyed || token != voiceToken || !session.active(token)) return false;
+        if (editorCurrent() && voiceSelectionCurrent()) return true;
+        reset("输入框或光标已变化，录音已取消。请重新开始。");
+        return false;
     }
 
-    private void finishRecording() {
-        if (!recording) return;
-        handler.removeCallbacks(stopAtLimit);
-        recording = false;
-        if (mic != null) mic.setText("Mic");
-        File file = recordingFile;
-        recordingFile = null;
-        MediaRecorder current = recorder;
-        recorder = null;
-        boolean saved = false;
-        try {
-            if (current != null) {
-                current.stop();
-                saved = true;
-            }
-        } catch (Exception e) {
-            if (status != null) status.setText("Recording too short or interrupted. Try again.");
-        } finally {
-            if (current != null) try { current.release(); } catch (Exception ignored) { }
-        }
-        if (!saved || file == null || android.os.SystemClock.elapsedRealtime() - recordStarted < 500) {
-            if (file != null) file.delete();
-            if (status != null) status.setText("Recording was too short. Tap Mic and speak for a moment.");
-            if (mic != null) mic.setEnabled(true);
-            if (improve != null) improve.setEnabled(true);
-            if (insert != null) insert.setEnabled(true);
-            return;
-        }
-        processingAudio = true;
-        if (mic != null) mic.setEnabled(false);
-        if (improve != null) improve.setEnabled(false);
-        if (insert != null) insert.setEnabled(false);
-        if (status != null) status.setText("Transcribing Chinese / English / Malay speech…");
-        final int token = generation;
-        String provider = selectedProvider();
-        String key = SecureSettings.getApiKey(this, provider);
-        AudioTranscriber.transcribe(provider, key, file, (transcript, error) -> {
-            if (token != generation || sensitiveField) return;
-            processingAudio = false;
-            if (mic != null) mic.setEnabled(true);
-            if (improve != null) improve.setEnabled(true);
-            if (error != null) {
-                if (insert != null) insert.setEnabled(false);
-                if (status != null) status.setText("Speech unavailable: " + error
-                        + " Tap Mic to record again.");
-                return;
-            }
-            if (preview != null) {
-                preview.setText(transcript);
-                preview.setSelection(preview.length());
-            }
-            if (status != null) status.setText("Speech recognised. Converting to English…");
-            translate();
-        });
-    }
+    private static String unavailableEditor() { return "请打开普通文字输入框。密码等敏感输入框不可使用。"; }
 
     private String selectedProvider() {
         return getSharedPreferences("voice_keyboard_settings", Context.MODE_PRIVATE)
                 .getString("selected_provider", "openai");
     }
 
-    private void discardRecording() {
-        handler.removeCallbacks(stopAtLimit);
-        recording = false;
-        MediaRecorder current = recorder;
-        recorder = null;
-        if (current != null) {
-            try { current.stop(); } catch (Exception ignored) { }
-            try { current.release(); } catch (Exception ignored) { }
-        }
-        if (recordingFile != null) recordingFile.delete();
-        recordingFile = null;
-        if (mic != null) mic.setText("Mic");
+    private String voiceProviderError() {
+        if (!"gemini".equals(selectedProvider())) return "请先在键盘设置选择Gemini，再开始说话。";
+        return ApiKeyValidation.validationMessage(SecureSettings.getApiKey(this, "gemini"));
     }
 
+    private boolean busy() {
+        return phase == Phase.RECORDING || phase == Phase.PROCESSING
+                || phase == Phase.TRANSLATING || phase == Phase.INSERTING;
+    }
 
-    /**
-     * Voice: transcribe then translate and insert directly into the host chat draft.
-     * Text: tap EN with a draft already typed in the host chat field, then replace
-     * that draft with the translated English. Never press the host Send button.
-     */
-    private void translate() {
-        if (assistantPanel != null) assistantPanel.stop();
-        if (sensitiveField || preview == null || recording || processingAudio || translating) return;
-        final String speechDraft = preview.getText().toString().trim();
-        final boolean fromTypedChat = speechDraft.isEmpty();
-        final String originalChat = fromTypedChat ? readChatDraft() : "";
-        final String original = fromTypedChat ? originalChat.trim() : speechDraft;
-        if (original.isEmpty()) {
-            status.setText("Speak using Mic, or type in the chat with your normal keyboard and tap EN.");
+    private void updateButtons() {
+        boolean available = editorAvailable();
+        if (mic != null) {
+            mic.setText(phase == Phase.RECORDING ? "Stop" : "Mic");
+            mic.setEnabled(available && (phase == Phase.RECORDING || !busy()));
+        }
+        if (improve != null) improve.setEnabled(available && !busy());
+        if (delete != null) delete.setEnabled(available && !busy());
+    }
+
+    private void toggleRecording() {
+        if (phase == Phase.RECORDING) { finishRecording(); return; }
+        if (busy() || recorder == null || transport == null) return;
+        if (!editorAvailable()) { reset(unavailableEditor()); return; }
+        String error = voiceProviderError();
+        if (error != null) { showStatus(error); return; }
+        if (!collapsedSelectionCurrent()) {
+            reset("请取消文字选取，把光标放在要填入的位置，再点Mic。");
             return;
         }
-        String provider = selectedProvider();
-        String key = SecureSettings.getApiKey(this, provider);
-        if (key.isEmpty()) {
-            status.setText("Save your " + ("gemini".equals(provider) ? "Gemini" : "OpenAI")
-                    + " API key in app settings first.");
-            return;
-        }
+        reset("");
+        if (!bindEditor()) { reset(unavailableEditor()); return; }
+        voiceCursor = selectionStart;
+        voiceSelectionVersion = selectionVersion;
+        voiceToken = session.start(false); // Every Mic click starts fresh; never attach earlier text.
+        phase = Phase.RECORDING;
+        error = recorder.start();
+        if (error != null) { reset(error); return; }
+        showStatus("Stop：交给Gemini整理；Keyboard取消。\n最长60秒，不会自动上传。");
+        updateButtons();
+    }
 
-        clearUndo();
-        int token = ++generation;
-        translating = true;
-        if (improve != null) improve.setEnabled(false);
-        if (mic != null) mic.setEnabled(false);
-        if (insert != null) { insert.setEnabled(false); insert.setVisibility(View.GONE); }
-        status.setText("Translating to English…");
-        OpenAiEnglish.Callback callback = (result, error) -> {
-            if (token != generation || sensitiveField || preview == null) return;
-            translating = false;
-            if (improve != null) improve.setEnabled(true);
-            if (mic != null) mic.setEnabled(true);
-            if (insert != null) insert.setEnabled(true);
-            if (error != null) {
-                // Speech transcript is retained for a retry; the typed chat is never modified on failure.
-                status.setText("Translation failed: " + error + ". Original text retained; tap EN to retry.");
+    private void finishRecording() {
+        final long token = voiceToken;
+        if (phase != Phase.RECORDING || !voiceCurrent(token)) return;
+        String error = voiceProviderError();
+        if (error != null) { reset(error); return; }
+        phase = Phase.PROCESSING; // Repeated Stop cannot upload the same audio twice.
+        updateButtons();
+        showStatus("Gemini正在转写并整理…\nKeyboard可取消；已发送的请求无法撤回。");
+        recorder.finish((file, failure) -> {
+            if (!voiceCurrent(token) || phase != Phase.PROCESSING) { deleteFile(file); return; }
+            if (failure != null || file == null) {
+                deleteFile(file);
+                reset(failure == null ? "录音未完成，请重新录音。" : failure);
                 return;
             }
-            if (result == null || result.trim().isEmpty()) {
-                status.setText("Translation returned no text. Original retained.");
+            // Transport owns the recording from here. No host text is read or attached.
+            transport.process(session, token, file, null, this::voiceResult);
+        });
+    }
+
+    private void voiceResult(long token, String transcript, String draft, String error) {
+        if (!voiceCurrent(token) || phase != Phase.PROCESSING) return;
+        if (error != null || transcript == null || draft == null || !session.accept(token, transcript, draft)) {
+            reset(error == null ? "未得到完整草稿，请重新说话。" : error);
+            return;
+        }
+        insertVoiceResult(token, session.draft());
+    }
+
+    /** EN alone authorizes reading selected/current editor text and translating it in place. */
+    private void translate() {
+        if (busy()) return;
+        if (!editorAvailable()) { reset(unavailableEditor()); return; }
+        String provider = selectedProvider();
+        String key = SecureSettings.getApiKey(this, provider);
+        String error = ApiKeyValidation.validationMessage(key);
+        if (error != null) { showStatus(error); return; }
+        reset("");
+        if (!bindEditor()) { reset(unavailableEditor()); return; }
+        final long token = generation;
+        final InputConnection originalConnection = getCurrentInputConnection();
+        try {
+            boolean finished = originalConnection.finishComposingText();
+            if (token != generation) return;
+            if (!editorCurrent() || originalConnection != getCurrentInputConnection()) {
+                reset("输入框已变化，未翻译。"); return;
+            }
+            if (!finished) { reset("输入框暂不支持安全替换，请用普通键盘重试。"); return; }
+        } catch (RuntimeException ignored) {
+            if (token == generation) reset("输入连接已失效，原文未替换。");
+            return;
+        }
+        final EditorSnapshot original = readTypedText();
+        if (token != generation || !editorCurrent()) return;
+        if (original == null || original.source().trim().isEmpty()) {
+            showStatus("请先用普通键盘输入文字，再点EN。无法完整读取的输入框不会替换。");
+            return;
+        }
+        phase = Phase.TRANSLATING;
+        updateButtons();
+        showStatus("正在把选中文字或输入框草稿整理成英文…");
+        OpenAiEnglish.Callback callback = (result, failure) -> {
+            if (destroyed || token != generation || phase != Phase.TRANSLATING) return;
+            if (!editorCurrent()) { reset("输入框已变化，翻译结果已清除。"); return; }
+            if (failure != null) { reset(failure); return; }
+            if (result == null || result.trim().isEmpty() || result.length() > VoiceDraftSession.MAX_DRAFT_CHARS) {
+                reset("翻译为空或过长，原文未改动。请缩短后重试。");
                 return;
             }
             String english = result.trim();
-            String chatBeforeInsertion = fromTypedChat ? originalChat : readChatDraft();
+            InputConnection finishingConnection = getCurrentInputConnection();
+            try {
+                boolean finished = finishingConnection.finishComposingText();
+                if (token != generation || phase != Phase.TRANSLATING) return;
+                if (!editorCurrent() || finishingConnection != getCurrentInputConnection()) {
+                    reset("输入框已变化，未替换。"); return;
+                }
+                if (!finished) { reset("输入框暂不支持安全替换，原文未改动。"); return; }
+            } catch (RuntimeException ignored) {
+                if (token == generation) reset("输入连接已失效，原文未替换。");
+                return;
+            }
+            EditorSnapshot current = readTypedText();
+            if (token != generation || phase != Phase.TRANSLATING) return;
+            if (!editorCurrent()) { reset("输入框已变化，翻译结果已清除。"); return; }
+            if (!original.same(current)) {
+                reset("输入框文字或光标已变化，未替换。请重新点EN。");
+                return;
+            }
+            InputConnection connection = getCurrentInputConnection();
             boolean inserted = false;
-            if (fromTypedChat) {
-                // Never overwrite typing that changed while the API request was running.
-                if (originalChat.equals(readChatDraft())) {
-                    InputConnection connection = getCurrentInputConnection();
-                    if (connection != null) {
-                        connection.beginBatchEdit();
-                        try {
-                            if (connection.setSelection(0, originalChat.length())) {
-                                inserted = connection.commitText(english, 1);
-                            }
-                        } finally {
-                            connection.endBatchEdit();
-                        }
-                    }
-                } else {
-                    status.setText("Chat text changed while translating. English is in preview; review before Insert.");
-                }
-            } else {
-                InputConnection connection = getCurrentInputConnection();
-                if (connection != null) inserted = connection.commitText(english, 1);
+            try {
+                connection.beginBatchEdit();
+                try {
+                    if (editorCurrent() && token == generation && connection == getCurrentInputConnection()
+                            && connection.setSelection(original.replaceStart(), original.replaceEnd())
+                            && editorCurrent() && token == generation && connection == getCurrentInputConnection())
+                        inserted = connection.commitText(english, 1);
+                } finally { connection.endBatchEdit(); }
+            } catch (RuntimeException ignored) {
+                if (token == generation) reset("填入结果不确定，请查看输入框，避免重复填入。");
+                return;
             }
-            if (inserted) {
-                String chatAfterInsertion = readChatDraft();
-                saveUndo(chatBeforeInsertion, chatAfterInsertion);
-                generation++;
-                preview.setText("");
-                if (insert != null) insert.setVisibility(View.GONE);
-                preview.setVisibility(View.GONE);
-                status.setText("English inserted into chat. Review it, then tap Send yourself.");
-            } else {
-                preview.setText(english);
-                preview.setSelection(preview.length());
-                preview.setVisibility(View.VISIBLE);
-                if (insert != null) insert.setVisibility(View.VISIBLE);
-                if (status != null && !status.getText().toString().startsWith("Chat text changed")) {
-                    status.setText("Could not insert automatically. Review English and tap Insert.");
-                }
-            }
+            if (token != generation) return; // Host callbacks can synchronously end the old editor.
+            if (!editorCurrent()) { reset("输入框已变化，请查看当前内容。"); return; }
+            if (inserted) reset("英文已填入。请核对后手动发送。");
+            else reset("输入框未接受替换。请查看原文，再重新点EN。");
         };
-        if ("gemini".equals(provider)) {
-            GeminiEnglish.rewrite(key, original, callback::done);
-        } else {
-            OpenAiEnglish.rewrite(key, original, callback);
-        }
+        if ("gemini".equals(provider)) GeminiEnglish.rewrite(key, original.source().trim(), callback::done);
+        else OpenAiEnglish.rewrite(key, original.source().trim(), callback);
     }
 
-    private String readChatDraft() {
-        InputConnection connection = getCurrentInputConnection();
-        if (connection == null) return "";
+    // Only translate() calls this. Voice capture, completion and insertion never read host text.
+    private EditorSnapshot readTypedText() {
+        if (!editorCurrent()) return null;
+        final long token = generation;
+        final InputConnection connection = getCurrentInputConnection();
         try {
             ExtractedTextRequest request = new ExtractedTextRequest();
-            ExtractedText extracted = connection.getExtractedText(request, 0);
-            // Never replace a partial extraction, or text belonging to another field.
-            if (extracted == null || extracted.text == null || extracted.startOffset != 0) return "";
-            return extracted.text.toString();
-        } catch (Exception e) {
-            return "";
+            request.hintMaxChars = MAX_TYPED_CHARS + 1;
+            ExtractedText text = connection.getExtractedText(request, 0);
+            if (token != generation || !editorCurrent() || connection != getCurrentInputConnection()) return null;
+            if (text == null || text.text == null || text.startOffset != 0
+                    || text.partialStartOffset >= 0 || text.partialEndOffset >= 0
+                    || text.text.length() > MAX_TYPED_CHARS
+                    || text.selectionStart < 0 || text.selectionEnd < 0
+                    || text.selectionStart > text.text.length() || text.selectionEnd > text.text.length()) return null;
+            return new EditorSnapshot(text.text.toString(), text.selectionStart, text.selectionEnd);
+        } catch (RuntimeException ignored) { return null; }
+    }
+
+    private static final class EditorSnapshot {
+        final String text;
+        final int start, end;
+        EditorSnapshot(String text, int start, int end) { this.text = text; this.start = start; this.end = end; }
+        int replaceStart() { return start == end ? 0 : Math.min(start, end); }
+        int replaceEnd() { return start == end ? text.length() : Math.max(start, end); }
+        String source() { return text.substring(replaceStart(), replaceEnd()); }
+        boolean same(EditorSnapshot other) {
+            return other != null && text.equals(other.text) && start == other.start && end == other.end;
         }
     }
 
-    private void insertText() {
-        if (assistantPanel != null) assistantPanel.stop();
-        if (sensitiveField || preview == null || translating || processingAudio || recording) return;
-        String value = preview.getText().toString().trim();
-        if (value.isEmpty()) return;
-        InputConnection connection = getCurrentInputConnection();
-        if (connection == null) {
-            status.setText("Tap a message input box first.");
-            return;
-        }
-        String before = readChatDraft();
-        if (connection.commitText(value, 1)) {
-            saveUndo(before, readChatDraft());
-            generation++;
-            preview.setText("");
-            if (insert != null) insert.setVisibility(View.GONE);
-            preview.setVisibility(View.GONE);
-            status.setText("Inserted into chat. Review before sending.");
-        } else {
-            status.setText("Insert failed. Tap the message input box and retry.");
-        }
-    }
-
-    /** Voice-only editor binding: no accessibility or chat-content inspection. */
-    private void bindVoiceEditor(EditorInfo info) {
-        boolean allowed = info != null && !isSensitive(info)
-                && (info.inputType & InputType.TYPE_MASK_CLASS) == InputType.TYPE_CLASS_TEXT;
-        voiceEditorBinding.bind(generation, info == null ? null : info.packageName,
-                info == null ? 0 : info.fieldId, info == null ? 0 : info.inputType,
-                getCurrentInputConnection(), allowed);
-        if (assistantPanel != null) assistantPanel.editorChanged(allowed);
-    }
-    private boolean beginVoiceEditor() {
-        EditorInfo info = getCurrentInputEditorInfo();
-        if (info == null || isSensitive(info)
-                || (info.inputType & InputType.TYPE_MASK_CLASS) != InputType.TYPE_CLASS_TEXT) return false;
-        voiceEditorBinding.bind(generation, info.packageName, info.fieldId, info.inputType,
-                getCurrentInputConnection(), true);
-        if (!voiceEditorCurrent()) return false;
-        // Starting a new spoken draft leaves only one local preview route visible.
-        if (preview != null) { preview.setText(""); preview.setVisibility(View.GONE); }
-        if (insert != null) insert.setVisibility(View.GONE);
-        return true;
-    }
-    private boolean voiceEditorCurrent() {
-        EditorInfo info = getCurrentInputEditorInfo();
-        android.app.KeyguardManager keyguard = (android.app.KeyguardManager) getSystemService(KEYGUARD_SERVICE);
-        return info != null && !isSensitive(info) && isInputViewShown()
-                && keyguard != null && !keyguard.isKeyguardLocked()
-                && voiceEditorBinding.matches(generation, info.packageName, info.fieldId,
-                        info.inputType, getCurrentInputConnection());
-    }
-    /** Explicit preview approval only. Commit at the cursor; never press Send. */
-    private String insertVoiceDraft(String draft) {
-        if (recording || processingAudio || translating || !voiceEditorCurrent()
-                || draft == null || draft.trim().isEmpty() || draft.length() > 4000)
-            return "当前输入框已变化或草稿不可用，请重新说话。";
-        InputConnection connection = getCurrentInputConnection();
-        if (connection == null || !voiceEditorCurrent() || connection != getCurrentInputConnection())
-            return "输入焦点已变化，未填入。";
+    /** Stop authorizes one insertion into the unchanged, originally bound collapsed cursor. */
+    private void insertVoiceResult(long token, String draft) {
+        if (phase != Phase.PROCESSING || !voiceCurrent(token)) return;
+        final long editorGeneration = generation;
+        final InputConnection connection = getCurrentInputConnection();
         try {
-            if (!connection.commitText(draft, 1)) return "输入框拒绝填入，草稿仍在预览。";
-            clearUndo(); // No host text read: legacy Undo must not target an earlier edit.
-            generation++;
-            return null;
+            // Finalize composing text only here, immediately before insertion. The only allowed
+            // synchronous callback is this call clearing composition at the exact same cursor.
+            boolean finished;
+            finishingVoiceComposition = true;
+            try { finished = connection.finishComposingText(); }
+            finally { finishingVoiceComposition = false; }
+            if (editorGeneration != generation || !session.active(token)) return;
+            if (!finished) { reset("输入框暂不支持安全填入，请重新开始。"); return; }
+            if (!voiceCurrent(token) || connection != getCurrentInputConnection()) return;
+            phase = Phase.INSERTING; // Own commit callbacks are not a new voice operation.
+            updateButtons();
+            boolean inserted = connection.commitText(draft, 1);
+            if (editorGeneration != generation) return;
+            if (!editorCurrent()) { reset("输入框已变化，请查看当前内容。"); return; }
+            reset(inserted ? "已填入输入框。请检查内容，再手动发送。"
+                    : "输入框未接受填入。请重新点Mic录音。");
         } catch (RuntimeException ignored) {
-            generation++; // Commit outcome may be uncertain: prevent repeating this draft action.
-            clearUndo();
-            return "输入连接已失效；请查看当前输入框，避免重复填入。";
+            if (editorGeneration == generation)
+                reset("填入结果不确定，请查看输入框，避免重复填入。");
         }
     }
 
-    private void clearUndo() {
-        undoBefore = null;
-        undoAfter = null;
-        if (undo != null) undo.setEnabled(false);
+    private boolean selectionCurrent() {
+        EditorInfo info = getCurrentInputEditorInfo();
+        return info != null && selectionBinding.matches(selectionEpoch, info.packageName,
+                info.fieldId, info.inputType, getCurrentInputConnection());
     }
 
-    private void saveUndo(String before, String after) {
-        clearUndo();
-        if (before == null || after == null || after.isEmpty() || after.equals(before)) return;
-        undoBefore = before;
-        undoAfter = after;
-        if (undo != null) undo.setEnabled(!sensitiveField);
+    private boolean collapsedSelectionCurrent() {
+        return selectionCurrent() && selectionStart >= 0 && selectionStart == selectionEnd;
     }
 
-    private void undoLastTranslation() {
-        if (assistantPanel != null) assistantPanel.stop();
-        if (sensitiveField || recording || translating || processingAudio || undoAfter == null) return;
-        String current = readChatDraft();
-        if (!undoAfter.equals(current)) {
-            // Do not wipe any typing or editing that happened after translation.
-            clearUndo();
-            if (status != null) status.setText("Chat was edited since translation; Undo cancelled to protect your text.");
-            return;
-        }
-        InputConnection connection = getCurrentInputConnection();
-        if (connection == null) {
-            if (status != null) status.setText("Tap a chat input box to undo.");
-            return;
-        }
-        boolean restored = false;
-        connection.beginBatchEdit();
-        try {
-            if (connection.setSelection(0, current.length())) {
-                restored = connection.commitText(undoBefore, 1);
-            }
-        } finally {
-            connection.endBatchEdit();
-        }
-        if (restored) {
-            clearUndo();
-            if (status != null) status.setText("Previous chat draft restored. Nothing was sent.");
-        } else if (status != null) {
-            status.setText("Unable to restore in this input field; draft not intentionally changed.");
+    private boolean voiceSelectionCurrent() {
+        return collapsedSelectionCurrent() && selectionStart == voiceCursor
+                && selectionVersion == voiceSelectionVersion;
+    }
+
+    private void seedSelection(EditorInfo info) {
+        selectionEpoch++;
+        selectionVersion++;
+        selectionStart = info == null ? -1 : info.initialSelStart;
+        selectionEnd = info == null ? -1 : info.initialSelEnd;
+        composingStart = composingEnd = -1;
+        selectionBinding.bind(selectionEpoch, info == null ? null : info.packageName,
+                info == null ? 0 : info.fieldId, info == null ? 0 : info.inputType,
+                getCurrentInputConnection(), editorAllowed(info));
+    }
+
+    @Override public void onUpdateSelection(int oldStart, int oldEnd, int newStart, int newEnd,
+            int candidatesStart, int candidatesEnd) {
+        super.onUpdateSelection(oldStart, oldEnd, newStart, newEnd, candidatesStart, candidatesEnd);
+        selectionVersion++;
+        selectionStart = selectionCurrent() ? newStart : -1;
+        selectionEnd = selectionCurrent() ? newEnd : -1;
+        composingStart = candidatesStart;
+        composingEnd = candidatesEnd;
+        // Same-offset notifications can indicate edits, so recording/network work always cancels.
+        // Only the synchronous composition clear we just invoked may retain the exact anchor.
+        if (phase == Phase.RECORDING || phase == Phase.PROCESSING) {
+            boolean ownClear = phase == Phase.PROCESSING && finishingVoiceComposition
+                    && editorCurrent() && selectionCurrent() && oldStart == voiceCursor && oldEnd == voiceCursor
+                    && newStart == voiceCursor && newEnd == voiceCursor
+                    && candidatesStart == -1 && candidatesEnd == -1;
+            if (ownClear) voiceSelectionVersion = selectionVersion;
+            else reset("输入框文字或光标已变化，录音已取消。请重新点Mic。");
         }
     }
 
-    /**
-     * Deletes from the host app's active editor, NOT from our local preview.
-     * One press removes selected text or the code point just before the cursor.
-     */
+    /** Existing explicit Delete action, with no AI/network side effect. */
     private void deleteFromChatInput() {
-        if (assistantPanel != null) assistantPanel.stop();
+        if (busy() || !editorAvailable()) return;
+        final long token = generation;
         InputConnection connection = getCurrentInputConnection();
-        if (connection == null) {
-            if (status != null) status.setText("Tap the WhatsApp message box first.");
-            return;
-        }
         try {
             CharSequence selected = connection.getSelectedText(0);
-            if (selected != null && selected.length() > 0) {
-                connection.commitText("", 1);
-            } else if (!connection.deleteSurroundingTextInCodePoints(1, 0)) {
-                // Some third-party input boxes don't implement deleteSurroundingTextInCodePoints.
+            if (token != generation || !editorAvailable() || connection != getCurrentInputConnection()) return;
+            if (selected != null && selected.length() > 0) connection.commitText("", 1);
+            else if (!connection.deleteSurroundingTextInCodePoints(1, 0)
+                    && token == generation && editorAvailable() && connection == getCurrentInputConnection())
                 sendDownUpKeyEvents(android.view.KeyEvent.KEYCODE_DEL);
-            }
-        } catch (Exception e) {
-            sendDownUpKeyEvents(android.view.KeyEvent.KEYCODE_DEL);
+            if (token == generation && editorAvailable() && connection == getCurrentInputConnection())
+                showStatus("已从输入框删除文字。");
+        } catch (RuntimeException ignored) {
+            // An uncertain editor failure must not trigger a second destructive action.
+            if (token == generation) showStatus("输入连接已失效，请查看输入框。");
         }
-        if (status != null) status.setText("Deleted from chat input. Clear Draft only clears the preview.");
     }
 
+    /** Status accepts only short, control-free text; response bodies/exception messages are never passed here. */
+    private void showStatus(String message) {
+        if (status == null) return;
+        StringBuilder safe = new StringBuilder();
+        int lines = 1;
+        for (int i = 0; message != null && i < message.length() && safe.length() < 180; ) {
+            int codePoint = message.codePointAt(i);
+            i += Character.charCount(codePoint);
+            if (codePoint == '\n' && lines++ < 2) safe.append('\n');
+            else if (Character.isISOControl(codePoint) || Character.getType(codePoint) == Character.FORMAT) safe.append(' ');
+            else safe.appendCodePoint(codePoint);
+        }
+        status.setText(safe.toString());
+    }
+
+    private static void deleteFile(File file) { if (file != null) file.delete(); }
+
+    private void reset(String message) {
+        generation++;
+        session.invalidate();
+        voiceToken = -1;
+        phase = Phase.IDLE;
+        if (recorder != null) recorder.cancel();
+        if (transport != null) transport.cancel();
+        voiceCursor = -1;
+        finishingVoiceComposition = false;
+        showStatus(message);
+        updateButtons();
+    }
+
+    @Override public void onStartInput(EditorInfo info, boolean restarting) {
+        super.onStartInput(info, restarting);
+        seedSelection(info);
+        reset(editorAllowed(info) ? IDLE_TEXT : unavailableEditor());
+    }
+    @Override public void onStartInputView(EditorInfo info, boolean restarting) {
+        super.onStartInputView(info, restarting);
+        if (!selectionCurrent()) seedSelection(info);
+        reset(editorAllowed(info) ? IDLE_TEXT : unavailableEditor());
+    }
     @Override public void onFinishInputView(boolean finishingInput) {
+        reset(IDLE_TEXT);
         super.onFinishInputView(finishingInput);
-        if (assistantPanel != null) assistantPanel.stop();
-        generation++; // Invalidate pending async speech/translation callbacks.
-        discardRecording();
-        processingAudio = false;
-        translating = false;
-        clearUndo();
     }
-
-    @Override public void onFinishInput() {
-        if (assistantPanel != null) assistantPanel.stop();
-        super.onFinishInput();
-    }
-
+    @Override public void onFinishInput() { reset(IDLE_TEXT); seedSelection(null); super.onFinishInput(); }
+    @Override public void onWindowShown() { super.onWindowShown(); updateButtons(); }
+    @Override public void onWindowHidden() { reset(IDLE_TEXT); super.onWindowHidden(); }
     @Override public void onDestroy() {
-        if (assistantPanel != null) assistantPanel.destroy();
-        discardRecording();
-        clearUndo();
+        destroyed = true;
+        reset("");
+        if (registered) { unregisterReceiver(screenOff); registered = false; }
         super.onDestroy();
     }
 }

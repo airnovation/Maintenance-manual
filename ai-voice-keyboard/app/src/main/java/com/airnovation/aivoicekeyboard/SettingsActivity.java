@@ -33,13 +33,12 @@ public class SettingsActivity extends Activity {
         layout.setPadding(24, 28, 24, 16);
 
         TextView title = new TextView(this);
-        title.setText(getPackageName().endsWith(".assistanttest")
-                ? "AI Voice Keyboard - Isolated Test" : "AI Voice Keyboard – prototype");
+        title.setText("AI Voice Keyboard – prototype");
         title.setTextSize(22);
         layout.addView(title);
 
         TextView details = new TextView(this);
-        details.setText("\n1. Allow microphone access.\n2. Enable the keyboard in Android Settings.\n3. Select AI Voice Keyboard as your input method.\n4. Open WhatsApp, Gmail or any text box.\n\n语音整理（Gemini）：选择Gemini并保存自己的API key。键盘内点“开始说话”，再点“结束并整理”；核对转写和草稿后点“确认填入”，最后由你发送。默认自然英文，可说“用中文”“客气一点”“简短一点”。修改草稿请点“修改上一稿”。不读取聊天，不需要无障碍权限；录音及转写会交给Gemini处理。\n\nLegacy shortcuts (旧版): Mic starts and Stop ends a recording. Audio is sent to your selected API provider for transcription and then English translation; a successful translation is inserted into the focused chat draft automatically. For typed text: type naturally using your usual Samsung/Gboard keyboard, switch to AI Voice Keyboard, then tap EN to translate the existing chat draft into concise, natural English. No need to use a separate Pinyin layout. EN never sends messages. Undo restores the immediately prior chat draft if you have not edited it since translation. The Keyboard button first tries to switch straight back to your previous phone keyboard, otherwise it opens the Android keyboard picker. Review before tapping Send yourself. Temporary recordings are deleted after processing.\n");
+        details.setText("\n1. Allow microphone access.\n2. Enable and select the keyboard in Android Settings.\n3. Select Gemini and save your own API key below.\n\nMic starts recording; Stop sends this recording to Gemini for transcription and intent-aware drafting. The default is natural English. Say 用中文, 客气一点 or 简短一点 to change the output. The completed draft is inserted automatically only into the same unchanged input position. Review or delete/edit it in the input field, then send the message yourself. Moving the cursor, selecting text or switching fields cancels pending voice input. No chat reading or Accessibility permission is used.\n\nEN keeps the original typed-text translation workflow: type with your usual keyboard, switch here, then tap EN for natural, conversational English that preserves your meaning, dates, names and uncertainty. Delete and Keyboard retain their original functions. Temporary recordings are deleted after processing or cancellation.\n");
         layout.addView(details);
 
         Button permission = new Button(this);
@@ -98,6 +97,8 @@ public class SettingsActivity extends Activity {
 
         EditText key = new EditText(this);
         key.setSingleLine(true);
+        key.setSaveEnabled(false);
+        key.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
         key.setHint("API key for selected provider (optional)");
         key.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         layout.addView(key);
@@ -107,16 +108,21 @@ public class SettingsActivity extends Activity {
         layout.addView(keyInfo);
 
         TextView keyStatus = new TextView(this);
-        keyStatus.setText("新语音整理需要Gemini。旧版Mic可使用所选Gemini或OpenAI。");
+        keyStatus.setText("Save a Gemini API key to use Mic. OpenAI remains available for EN.");
         keyStatus.setTextSize(14);
         layout.addView(keyStatus);
 
         Button save = new Button(this);
         save.setText("Save API Key Locally");
         save.setOnClickListener(v -> {
-            String input = key.getText().toString().trim();
+            String input = key.getText().toString();
             if (input.isEmpty()) {
                 Toast.makeText(this, "Enter a key to save, or use Remove Key", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            String validation = ApiKeyValidation.validationMessage(input);
+            if (validation != null) {
+                keyStatus.setText(validation);
                 return;
             }
             try {
@@ -126,7 +132,7 @@ public class SettingsActivity extends Activity {
                     throw new IllegalStateException("Encrypted key could not be read back");
                 }
                 key.setText("");
-                keyStatus.setText("Saved and verified: " + selected + " key. The key stays on this phone.");
+                keyStatus.setText("Saved and verified: " + selected + " key. Stored encrypted on this phone; used only with the selected API provider.");
                 Toast.makeText(this, "API key saved securely", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
                 // Show the exception TYPE only. Never print or log the secret key itself.

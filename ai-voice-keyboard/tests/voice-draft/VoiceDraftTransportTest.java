@@ -57,7 +57,7 @@ public final class VoiceDraftTransportTest {
             testEmptyOutput(false); testEmptyOutput(true); testOverlongTranscript(); testOverlongDraft();
             testResponseBound(65536, false); testResponseBound(65537, true); testResponseBound(65538, false);
             testAudioSize(99); testAudioSize(2 * 1024 * 1024 + 1); testNullAudio();
-            testMissingKey(false); testMissingKey(true); testStaleInput(); testQueuedCancel(); testQueuedInvalidate();
+            testMissingKey(false); testMissingKey(true); testMalformedKeys(); testUntrustedException(); testStaleInput(); testQueuedCancel(); testQueuedInvalidate();
             testCancelInFlight(false); testCancelInFlight(true); testPostedCallback(false); testPostedCallback(true);
             testInvalidateBeforeOutput(); testInvalidateBetweenStages(); testInvalidationBeforeFallback(); testPostedCancel(); testReplacement();
             testTimeout(true); testTimeout(false); testDeadline();
@@ -256,8 +256,24 @@ public final class VoiceDraftTransportTest {
     private static void testMissingKey(boolean stale) throws Exception {
         begin(); SecureSettings.key = ""; Case test = new Case(); Path audio = audio(256);
         test.process(audio, null); finishWorker(); if (stale) test.session.invalidate(); Handler.drain();
-        if (stale) check(test.result.count == 0, "stale missing-key callback suppressed"); else assertError(test, "API Key");
+        if (stale) check(test.result.count == 0, "stale missing-key callback suppressed"); else assertError(test, "API key");
         check(!Files.exists(audio), "missing key deletes audio"); end(0);
+    }
+    private static void testMalformedKeys() throws Exception {
+        for (String key : new String[] {null, "short", "SYNTHETIC-KEY-WITH\nLINE-BREAK", "SYNTHETIC-KEY-WITH\rRETURN",
+                "SYNTHETIC-KEY-WITH\tTAB", "SYNTHETIC-KEY-含中文", "Unexpected char 0x2028 in API key",
+                " SYNTHETIC-KEY-WITH-SPACE", "SYNTHETIC-KEY-WITH-SPACE ", "https://aistudio.google.com/apikey"}) {
+            begin(); SecureSettings.key = key; Case test = new Case(); Path file = audio(256);
+            test.process(file, null); finishWorker(); Handler.drain(); assertError(test, "API key");
+            check(!Files.exists(file), "malformed key deletes audio before HTTP"); end(0);
+        }
+    }
+    private static void testUntrustedException() throws Exception {
+        begin(); Case test = new Case(); FakeConnection conn = NETWORK.enqueue(200, "NOT READ");
+        conn.headerFailure = true; test.process(audio(256), null); finishWorker(); Handler.drain();
+        assertError(test, "未完成");
+        check(!test.result.error.contains(SecureSettings.SYNTHETIC_KEY), "header failure cannot expose key");
+        check(conn.outputCalls == 0, "header failure sends nothing"); end(1);
     }
     private static void testStaleInput() throws Exception {
         begin(); Case test = new Case(); Path audio = audio(256); test.session.invalidate(); int reads = SecureSettings.reads;
@@ -454,12 +470,17 @@ public final class VoiceDraftTransportTest {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
         final CountDownLatch responseEntered = new CountDownLatch(1), responseRelease = new CountDownLatch(1);
         volatile int disconnects, outputCalls, responseCalls, inputCalls, errorStreamCalls;
-        volatile boolean outputClosed, outputTimeout, blockResponse;
+        volatile boolean outputClosed, outputTimeout, blockResponse, headerFailure;
         Runnable onOpen, onDisconnect;
         FakeConnection(URL url, int status, String body) {
             super(url); this.status = status; input = new TrackingInput(body.getBytes(StandardCharsets.UTF_8));
         }
         void target(URL target) { url = target; }
+        @Override public void setRequestProperty(String name, String value) {
+            if (headerFailure && "x-goog-api-key".equals(name))
+                throw new IllegalArgumentException("PRIVATE ERROR leaked header " + value);
+            super.setRequestProperty(name, value);
+        }
         @Override public void connect() { throw new AssertionError("Unexpected explicit connect"); }
         @Override public boolean usingProxy() { return false; }
         @Override public void disconnect() {

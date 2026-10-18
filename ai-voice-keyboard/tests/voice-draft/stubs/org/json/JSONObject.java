@@ -35,6 +35,7 @@ public final class JSONObject {
         Object value = values.get(key);
         return value instanceof JSONObject ? (JSONObject) value : null;
     }
+    public String optString(String key) { return optString(key, ""); }
     public String optString(String key, String fallback) {
         Object value = values.get(key);
         return value instanceof String ? (String) value : fallback;
