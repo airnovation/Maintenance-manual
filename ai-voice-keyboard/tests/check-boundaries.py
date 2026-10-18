@@ -19,7 +19,9 @@ assert 'getMagnificationController().getScale()' in service
 assert 'ancestorClip.contains(bounds)' in service
 assert 'childClip.intersect(bounds)' in service
 assert 'if (inList && AssistantNodeFilter.allowed' in service
-assert 'if (!unobscured) { diagnostics.sameWindowOverlap++; continue; }' in service
+assert 'diagnostics.sameWindowOverlap++;' in service
+assert 'diagnostics.overlaps(box(node.bounds)' in service
+assert service.index('diagnostics.overlaps(box(node.bounds)') < service.index('if (metadataOnly) continue;')
 assert 'if (metadataOnly) continue;' in service
 assert service.index('if (metadataOnly) continue;') < service.index('CharSequence text = node.node.getText();')
 assert service.index('if (metadataOnly) return fail(diagnostics.metadataResult(visited[0]));') < service.index('if (!session.capture(')

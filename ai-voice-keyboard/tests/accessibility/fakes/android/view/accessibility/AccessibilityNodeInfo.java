@@ -7,6 +7,8 @@ public final class AccessibilityNodeInfo {
     public String packageName="com.whatsapp.w4b", resourceId, className="android.view.View";
     public boolean visible=true, editable, password, focused, allowText;
     public int windowId=7, textCalls;
+    public int drawingOrder=0;
+    public boolean throwDrawingOrder;
     public CharSequence fixtureText="SYNTHETIC MESSAGE";
     public Rect bounds=new Rect(), localBounds=new Rect();
     public final List<AccessibilityNodeInfo> children=new ArrayList<>();
@@ -19,6 +21,7 @@ public final class AccessibilityNodeInfo {
     public boolean isPassword() { return password; }
     public boolean isFocused() { return focused; }
     public int getWindowId() { return windowId; }
+    public int getDrawingOrder() { if (throwDrawingOrder) throw new IllegalStateException("SYNTHETIC_ORDER_ERROR"); return drawingOrder; }
     public void getBoundsInScreen(Rect out) { copy(bounds, out); }
     public void getBoundsInParent(Rect out) { copy(localBounds, out); }
     private static void copy(Rect from, Rect to) { to.set(from.left, from.top, from.right, from.bottom); }

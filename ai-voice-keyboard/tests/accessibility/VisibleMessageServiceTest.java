@@ -121,6 +121,82 @@ public final class VisibleMessageServiceTest {
             equalCounter(out,"S",1); equalCounter(out,"F",0); equalCounter(out,"E",0); scenarios++;
         }
     }
+    private static String legacyCounterSignature(String out, boolean includeMissingText) {
+        String[] names={"N","M","L","I","U","K","C","W","S","F","O"};
+        int[] expected={25,2,0,22,3,1,0,0,1,1,1};
+        StringBuilder signature=new StringBuilder();
+        for (int i=0; i<names.length; i++) {
+            int actual=counter(out,names[i]);
+            check(actual==expected[i], "Synthetic legacy counter "+names[i]+" must equal "+expected[i]+": "+out);
+            signature.append(names[i]).append('=').append(actual).append(' ');
+        }
+        if (includeMissingText) {
+            equalCounter(out,"T",0);
+            signature.append("T=0");
+        }
+        return signature.toString();
+    }
+    private static void assertOverlapMetadata(String output, boolean backgroundLike) {
+        String summary=null;
+        for (String line:output.split("\\n"))
+            if (line.startsWith("遮挡关系：")) summary=line.substring("遮挡关系：".length()).trim();
+        check(summary!=null, "Actual service must include overlap metadata");
+        String expected=backgroundLike ? "SP=1 LO=1 VIEW=1 BIG=1" : "SP=1 HI=1 TEXT=1 SM=1";
+        check(expected.equals(summary), "Unexpected overlap metadata: "+summary);
+        equalCounter(summary,"SP",1);
+        equalCounter(summary,backgroundLike ? "LO" : "HI",1);
+        equalCounter(summary,backgroundLike ? "VIEW" : "TEXT",1);
+        equalCounter(summary,backgroundLike ? "BIG" : "SM",1);
+        check(!output.contains("synthetic_background") && !output.contains("synthetic_corner_label"), "Do not expose raw resource IDs");
+        check(!output.contains("android.view.View") && !output.contains("android.widget.TextView"), "Do not expose raw classes");
+    }
+    private static String ambiguousOverlapFixture(boolean backgroundLike) {
+        try (Fixture f=new Fixture()) {
+            f.message.drawingOrder=2;
+            AccessibilityNodeInfo mismatch=node("message_text","android.widget.TextView",20,400,600,500);
+            mismatch.localBounds=new Rect(0,0,580,140);
+            mismatch.drawingOrder=4;
+            f.list.children.add(mismatch);
+            AccessibilityNodeInfo mask=backgroundLike
+                    ? node("synthetic_background","android.view.View",0,100,1080,1500)
+                    : node("synthetic_corner_label","android.widget.TextView",570,280,620,320);
+            // These explicit host fixtures differ in geometry, class, and sibling order.
+            // Neither the class nor drawing order establishes actual visual opacity.
+            mask.drawingOrder=backgroundLike ? 1 : 3;
+            f.list.children.add(mask);
+            for (int i=0; i<19; i++) {
+                AccessibilityNodeInfo filler=node(i<17 ? "synthetic_structure_"+i : null,
+                        "android.view.View",700,600+i*20,780,610+i*20);
+                filler.drawingOrder=5+i;
+                f.list.children.add(filler);
+            }
+            String diagnostic=f.diagnose();
+            legacyCounterSignature(diagnostic,false);
+            assertOverlapMetadata(diagnostic,backgroundLike);
+            equalCounter(diagnostic,"E",0);
+            // Also reproduce the exact old failure-counter shape, including T=0.
+            // All nodes remain poisoned: neither the size-mismatch message nor the
+            // overlapped candidate is allowed to reach getText in ordinary capture.
+            long token=AssistantSession.INSTANCE.start();
+            String empty=VisibleMessageService.captureOnce(token);
+            check(empty!=null && empty.contains("未采集到"), "Synthetic rejected capture must produce empty counters");
+            String signature=legacyCounterSignature(empty,true);
+            assertOverlapMetadata(empty,backgroundLike);
+            check(!AssistantSession.INSTANCE.active(), "Rejected capture ends session");
+            check(AssistantSession.INSTANCE.visible(token).isEmpty(), "Rejected capture stores no text");
+            assertNoTextReads(f.root);
+            scenarios++;
+            System.out.println("PASS synthetic " + (backgroundLike ? "large background-like View" : "small corner TextView")
+                    + ": " + signature + "; all getText poisoned and untouched");
+            return signature;
+        }
+    }
+    private static void sameCountersDifferentMasks() {
+        String background=ambiguousOverlapFixture(true);
+        String corner=ambiguousOverlapFixture(false);
+        check(background.equals(corner), "Different mask metadata must reproduce identical legacy counters");
+        System.out.println("PASS identical legacy counters do not uniquely identify the overlapping UI region");
+    }
     private static void normalCaptureControl() {
         try (Fixture f=new Fixture()) {
             f.message.allowText=true;
@@ -148,9 +224,21 @@ public final class VisibleMessageServiceTest {
             assertNoTextReads(f.root); scenarios++;
         }
     }
+    private static void unavailableDrawingOrder() {
+        try (Fixture f=new Fixture()) {
+            f.message.throwDrawingOrder=true;
+            AccessibilityNodeInfo mask=node("synthetic_mask", "android.view.View",20,200,600,300);
+            mask.drawingOrder=1; f.list.children.add(mask);
+            String out=f.diagnose();
+            equalCounter(out,"O",1); equalCounter(out,"E",0); equalCounter(out,"UN",1);
+            check(!out.contains("SYNTHETIC_ORDER_ERROR"), "Exception content must not enter diagnostics");
+            scenarios++;
+        }
+    }
     public static void main(String[] args) {
-        eligibleMetadata(); unsupportedList(); clippedMessage(); externalOverlay();
+        unavailableDrawingOrder(); eligibleMetadata(); unsupportedList(); clippedMessage(); externalOverlay();
         sameWindowOverlay(); screenClippedSize(); normalCaptureControl(); invalidTokenEndsSession();
+        sameCountersDifferentMasks();
         System.out.println("PASS "+checks+" checks across "+scenarios+" actual VisibleMessageService scenarios (host fakes; no Android/device verification)");
     }
 }

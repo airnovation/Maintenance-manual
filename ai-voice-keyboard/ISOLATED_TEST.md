@@ -1,3 +1,11 @@
+## v0.14: content-free overlap relationship diagnostics
+
+This adds bounded category counts to the existing “本机诊断（不读文字）” action. It distinguishes same/different parent, relative drawing order, reported element category and overlap-area band. Only nonzero fixed codes and numbers are displayed. The diagnostic never reads message text or screenshots. Raw resource IDs, names and coordinates are not displayed, stored or uploaded; existing node metadata is used locally only to calculate the fixed categories. Capture and visibility decisions are unchanged. This is still a diagnosis, not a claim that message reading has been repaired.
+
+No Gemini key is needed for this test. Enable the new isolated keyboard and its Accessibility service, open the WhatsApp Business chat input, tap “启动助手” ONCE to expand the controls, then tap “本机诊断（不读文字）”. Do not tap “同意并读取”. Share only the lower diagnostic-number area, especially the new “遮挡关系” line; do not include the conversation above.
+
+This fresh one-time certificate cannot replace the previous test app in place. Replace ONLY “AI Voice Keyboard - Isolated Test” if needed; keep the original keyboard. There is no automatic uninstall. The temporary signing key is removed in CI; no private key or password is distributed.
+
 ## v0.13: local capture diagnosis
 
 Adds “本机诊断（不读文字）”, a separate metadata-only action. It displays counts for recognized message nodes and visibility/filter stages. It never calls node getText, Gemini, microphone or insertion; the temporary session is invalidated immediately. Ordinary assistant operation is unchanged.

@@ -161,7 +161,11 @@ public final class VisibleMessageService extends AccessibilityService {
                 for (NodeText node : found) {
                     boolean unobscured = AssistantNodeFilter.unobscured(box(node.bounds), box(node.clip), node.ancestors, sameWindowMasks);
                     // Only after both clipping and known same-window overlap checks, access message text.
-                    if (!unobscured) { diagnostics.sameWindowOverlap++; continue; }
+                    if (!unobscured) {
+                        diagnostics.sameWindowOverlap++;
+                        diagnostics.overlaps(box(node.bounds), node.parentId, node.drawingOrder, node.ancestors, sameWindowMasks);
+                        continue;
+                    }
                     diagnostics.eligible++;
                     if (metadataOnly) continue; // Never access text in local diagnostics.
                     CharSequence text = node.node.getText();
@@ -207,7 +211,7 @@ public final class VisibleMessageService extends AccessibilityService {
         if (!childClip.intersect(bounds)) return;
         String pkg = node.getPackageName() == null ? "" : node.getPackageName().toString();
         if (!sourcePackage.equals(pkg) || !AssistantSession.isWhatsApp(pkg)) return;
-        if (node.isPassword()) { sameWindowMasks.add(new AssistantNodeFilter.Region(nodeId, box(bounds))); return; }
+        if (node.isPassword()) { sameWindowMasks.add(mask(nodeId, node, bounds, ancestors)); return; }
         String id = node.getViewIdResourceName();
         String clazz = node.getClassName() == null ? "" : node.getClassName().toString();
         boolean knownList = "android.widget.ListView".equals(clazz)
@@ -219,7 +223,7 @@ public final class VisibleMessageService extends AccessibilityService {
         boolean unobscured = true;
         for (Rect covered : occlusions) if (Rect.intersects(bounds, covered)) { unobscured = false; break; }
         if (node.isEditable()) {
-            sameWindowMasks.add(new AssistantNodeFilter.Region(nodeId, box(bounds)));
+            sameWindowMasks.add(mask(nodeId, node, bounds, ancestors));
             if (fullyInside && unobscured && AssistantSession.isResource(pkg, id, "entry") && node.isFocused()) editorFound[0] = true;
             return; // Never read the existing typed draft through Accessibility.
         }
@@ -233,9 +237,9 @@ public final class VisibleMessageService extends AccessibilityService {
         if (message) diagnostics.candidate(inList, fullyInside, unobscured, originalSize);
         // Treat every overlapping non-ancestor UI region as potential same-window occlusion.
         // Transparent/lower-layer siblings may cause conservative refusal rather than a hidden read.
-        if (!message) sameWindowMasks.add(new AssistantNodeFilter.Region(nodeId, box(bounds)));
+        if (!message) sameWindowMasks.add(mask(nodeId, node, bounds, ancestors));
         if (inList && AssistantNodeFilter.allowed(pkg, id, true, false, false, fullyInside && unobscured && originalSize))
-            out.add(new NodeText(bounds, ancestorClip, ancestors, AccessibilityNodeInfo.obtain(node)));
+            out.add(new NodeText(bounds, ancestorClip, ancestors, AccessibilityNodeInfo.obtain(node), safeDrawingOrder(node)));
         List<Integer> childAncestors = new ArrayList<>(ancestors); childAncestors.add(nodeId);
         for (int i = 0; i < node.getChildCount() && visited[0] < 250; i++) {
             AccessibilityNodeInfo child = node.getChild(i);
@@ -244,11 +248,28 @@ public final class VisibleMessageService extends AccessibilityService {
             } finally { child.recycle(); }
         }
     }
+    private static int safeDrawingOrder(AccessibilityNodeInfo node) {
+        try { return node.getDrawingOrder(); } catch (RuntimeException ignored) { return 0; }
+    }
+    private static AssistantNodeFilter.Region mask(int id, AccessibilityNodeInfo node, Rect bounds, List<Integer> ancestors) {
+        int kind = 0;
+        String clazz = node.getClassName() == null ? "" : node.getClassName().toString();
+        if (node.isPassword() || node.isEditable()) kind = 6;
+        else if ("android.view.SurfaceView".equals(clazz) || "android.view.TextureView".equals(clazz)) kind = 5;
+        else if (node.getChildCount() > 0) kind = 4;
+        else if ("android.widget.TextView".equals(clazz)) kind = 1;
+        else if ("android.widget.ImageView".equals(clazz)) kind = 2;
+        else if ("android.view.View".equals(clazz)) kind = 3;
+        int parent = ancestors.isEmpty() ? -1 : ancestors.get(ancestors.size() - 1);
+        return new AssistantNodeFilter.Region(id, box(bounds), parent, safeDrawingOrder(node), kind);
+    }
     private static final class NodeText {
-        final int top, left; final Rect bounds, clip; final List<Integer> ancestors; final AccessibilityNodeInfo node;
-        NodeText(Rect bounds, Rect clip, List<Integer> ancestors, AccessibilityNodeInfo node) {
+        final int top, left, parentId, drawingOrder; final Rect bounds, clip; final List<Integer> ancestors; final AccessibilityNodeInfo node;
+        NodeText(Rect bounds, Rect clip, List<Integer> ancestors, AccessibilityNodeInfo node, int drawingOrder) {
             this.top = bounds.top; this.left = bounds.left; this.bounds = new Rect(bounds);
             this.clip = new Rect(clip); this.ancestors = new ArrayList<>(ancestors); this.node = node;
+            this.parentId = ancestors.isEmpty() ? -1 : ancestors.get(ancestors.size() - 1);
+            this.drawingOrder = drawingOrder;
         }
     }
     private static AssistantNodeFilter.Box box(Rect bounds) {

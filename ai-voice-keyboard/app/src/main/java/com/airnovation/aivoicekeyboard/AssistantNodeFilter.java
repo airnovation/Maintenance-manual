@@ -14,7 +14,12 @@ public final class AssistantNodeFilter {
     public static final class Region {
         public final int nodeId;
         public final Box box;
-        public Region(int nodeId, Box box) { this.nodeId = nodeId; this.box = box; }
+        public final int parentId, drawingOrder, kind;
+        public Region(int nodeId, Box box) { this(nodeId, box, -1, 0, 0);
+        }
+        public Region(int nodeId, Box box, int parentId, int drawingOrder, int kind) {
+            this.nodeId = nodeId; this.box = box;
+            this.parentId = parentId; this.drawingOrder = drawingOrder; this.kind = kind; }
     }
     public static boolean unobscured(Box message, Box ancestorClip, java.util.List<Integer> ancestors,
             java.util.List<Region> possibleOverlays) {

@@ -6,8 +6,8 @@ android {
         applicationId 'com.airnovation.aivoicekeyboard'
         minSdk 26
         targetSdk 35
-        versionCode 13
-        versionName '0.13-local-diagnostics'
+        versionCode 14
+        versionName '0.14-overlap-diagnostics'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

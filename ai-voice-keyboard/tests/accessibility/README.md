@@ -30,7 +30,23 @@ network connection, signing, installation, or publishing is involved.
   and unrelated node getters poisoned.
 - An invalid-token diagnostic request must also end the active session.
 
-The suite currently passes 147 assertions over 8 scenarios.
+- Two distinct synthetic layouts reproduce the same legacy failure counters:
+  `N=25 M=2 L=0 I=22 U=3 K=1 C=0 W=0 S=1 F=1 O=1 T=0`.
+  One has a large background-like `android.view.View` sibling; the other has a
+  small corner-overlapping `android.widget.TextView` sibling. Their declared
+  drawing orders are respectively below and above the message. Both execute
+  metadata diagnostics and ordinary rejected capture with every text getter
+  still poisoned and untouched. This shows the old aggregate counters cannot
+  uniquely identify the overlapping UI element; it does not identify a real
+  device's layout or establish actual opacity or z-order.
+
+  The extended diagnostic summary must distinguish these fixtures with
+  `SP=1 LO=1 VIEW=1 BIG=1` versus `SP=1 HI=1 TEXT=1 SM=1`, while both remain
+  refused (`O=1`, `E=0`) and neither exposes raw class names or resource IDs.
+  These summary assertions run on both the metadata-only and ordinary
+  empty-capture paths.
+
+The suite currently passes 431 assertions over 11 scenarios.
 
 ## Mutation/regression check
 
@@ -54,3 +70,5 @@ window reporting, actual app resource IDs, or physical visibility semantics.
 remain shared. This is a host-side control-flow/privacy regression suite, not
 Android instrumentation or a claim of real-device/WhatsApp layout validation.
 The root test runner is deliberately unchanged; run this suite separately.
+
+A throwing drawing-order getter is classified as unknown, preserves refusal, and never prints exception details.
