@@ -46,11 +46,15 @@ final class AssistantRecorder {
     void finish(Finished callback) {
         main.removeCallbacks(limit);
         if (recorder == null) { callback.done(null, "尚未录音。"); return; }
-        boolean ok = false;
-        try { recorder.stop(); ok = SystemClock.elapsedRealtime() - started >= 500; }
-        catch (Exception ignored) { }
-        finally { recorder.release(); recorder = null; }
+        MediaRecorder current = recorder; recorder = null;
         File finished = file; file = null;
+        boolean ok = false;
+        try { current.stop(); ok = SystemClock.elapsedRealtime() - started >= 500; }
+        catch (Exception ignored) { }
+        finally {
+            // Release failure must not skip file cleanup or the completion callback.
+            try { current.release(); } catch (Exception ignored) { ok = false; }
+        }
         if (!ok) { if (finished != null) finished.delete(); callback.done(null, "录音太短或被中断，请重试。"); }
         else callback.done(finished, null);
     }
@@ -64,3 +68,4 @@ final class AssistantRecorder {
         if (file != null) file.delete(); file = null;
     }
 }
+

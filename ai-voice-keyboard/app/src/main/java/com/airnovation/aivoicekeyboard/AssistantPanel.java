@@ -35,11 +35,15 @@ final class AssistantPanel {
     private boolean insertionConfirmed;
     private TextToSpeech tts;
     private boolean localVoiceReady, allowedEditor, registered, consentPending, busy, demo;
+    // Session validity is not permission to speak: recording can start in the same session.
+    private boolean speechRequested, ttsInitializing, destroyed;
+    private long speechToken = -1, ttsGeneration;
     private long shownToken = -1;
     private String transcript = "";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable check = new Runnable() {
         @Override public void run() {
+            if (destroyed) return;
             if (shownToken != session.token()) {
                 teardown();
                 if (output != null && shownToken != -1) output.setText("页面或会话已变化。旧上下文已清除，请重新启动助手。");
@@ -119,7 +123,7 @@ final class AssistantPanel {
         AssistantGemini.explainVisible(transport, session, this::showResponse);
     }
     private boolean current(long token) {
-        return session.active() && token == session.token() && (demo || VisibleMessageService.stillCurrent(token));
+        return !destroyed && session.active() && token == session.token() && (demo || VisibleMessageService.stillCurrent(token));
     }
     private void showResponse(long token, String chinese, String english, String error) {
         if (token != session.token()) return;
@@ -133,6 +137,7 @@ final class AssistantPanel {
                 + "\n\n请自行核对当前聊天和英文，可点击插入到当前框。不会自动识别群身份或发送。");
     }
     private void recordReply() {
+        if (destroyed) return;
         insertionConfirmed = false; insert.setText("插入到当前框");
         if (!readyEditor()) return;
         if (!session.active()) { output.setText("请先启动助手并读取当前消息。"); return; }
@@ -157,7 +162,10 @@ final class AssistantPanel {
             });
         } else {
             session.clearDraft();
-            if (tts != null) tts.stop();
+            // Revoke the pending read-aloud before touching the microphone, even if start fails.
+            if (!cancelSpeech()) {
+                output.setText("朗读停止失败，未开始录音。请关闭助手后重试。"); return;
+            }
             String error = recorder.start();
             if (error != null) output.setText(error);
             else { reply.setText("停止并转写"); output.setText("正在录音。点击“停止并转写”后发给Gemini；关闭或页面变化将取消。最长60秒。"); }
@@ -197,34 +205,81 @@ final class AssistantPanel {
         });
     }
     private void speak() {
+        if (destroyed) return;
         insertionConfirmed = false; insert.setText("插入到当前框");
         if (!session.active() || session.explanation().isEmpty()) { output.setText("请先取得中文解释。"); return; }
         if (recorder.recording()) { output.setText("请先停止录音，再朗读解释。"); return; }
+        long token = session.token();
+        if (!current(token)) { stopWithReason(); return; }
+        speechRequested = true; speechToken = token;
         if (tts == null) {
-            final long token = session.token();
-            tts = new TextToSpeech(context, result -> {
-                if (result == TextToSpeech.SUCCESS && tts != null && tts.getVoices() != null) {
-                    for (Voice voice : tts.getVoices()) {
-                        if (Locale.CHINESE.getLanguage().equals(voice.getLocale().getLanguage()) && !voice.isNetworkConnectionRequired()) {
-                            localVoiceReady = tts.setVoice(voice) == TextToSpeech.SUCCESS;
-                            if (localVoiceReady) break;
-                        }
-                    }
+            ttsInitializing = true;
+            final long generation = ++ttsGeneration;
+            try {
+                // Always queue on the UI thread, including a constructor-time onInit callback.
+                tts = new TextToSpeech(context, result ->
+                        handler.post(() -> speechInitialized(generation, result)));
+            } catch (RuntimeException ignored) {
+                releaseSpeechEngine(); speakReady();
+            }
+        } else speakReady();
+    }
+    private void speechInitialized(long generation, int result) {
+        if (destroyed || generation != ttsGeneration || tts == null || !ttsInitializing) return;
+        ttsInitializing = false; localVoiceReady = false;
+        try {
+            java.util.Set<Voice> voices = result == TextToSpeech.SUCCESS ? tts.getVoices() : null;
+            if (voices != null) for (Voice voice : voices) {
+                if (voice != null && voice.getLocale() != null
+                        && Locale.CHINESE.getLanguage().equals(voice.getLocale().getLanguage())
+                        && !voice.isNetworkConnectionRequired()) {
+                    localVoiceReady = tts.setVoice(voice) == TextToSpeech.SUCCESS;
+                    if (localVoiceReady) break;
                 }
-                if (current(token)) speakReady();
-            });
-        } else if (current(session.token())) speakReady();
+            }
+        } catch (RuntimeException ignored) { localVoiceReady = false; }
+        // A failed engine must be retryable on another explicit tap; never auto-retry.
+        if (!localVoiceReady) releaseSpeechEngine();
+        speakReady();
     }
     private void speakReady() {
-        if (!localVoiceReady) { output.setText("未找到离线中文语音。请在系统语音设置安装后重新打开键盘；文字解释仍可查看。\n" + session.explanation()); return; }
-        if (session.active()) tts.speak(session.explanation(), TextToSpeech.QUEUE_FLUSH, null, "assistant-" + session.token());
+        if (!speechRequested || destroyed) return;
+        if (recorder.recording()) { cancelSpeech(); return; }
+        if (speechToken != session.token()) { cancelSpeech(); return; }
+        if (!current(speechToken)) { stopWithReason(); return; }
+        if (ttsInitializing) return;
+        // Consume once. Duplicate init callbacks cannot replay a fulfilled request.
+        speechRequested = false; speechToken = -1;
+        if (tts == null || !localVoiceReady) {
+            output.setText("未找到可用的离线中文语音。请检查系统语音设置后重试；文字解释仍可查看。\n" + session.explanation()); return;
+        }
+        try {
+            if (tts.speak(session.explanation(), TextToSpeech.QUEUE_FLUSH, null, "assistant-" + session.token()) == TextToSpeech.SUCCESS) return;
+        } catch (RuntimeException ignored) { }
+        output.setText("离线朗读失败，可重试；文字解释仍可查看。\n" + session.explanation());
+    }
+    private boolean cancelSpeech() {
+        speechRequested = false; speechToken = -1;
+        if (tts == null) return true;
+        // An unready engine has never spoken. A ready engine must acknowledge stopping
+        // before recording starts; a TTS failure must not contaminate microphone input.
+        boolean unready = ttsInitializing || !localVoiceReady;
+        try { return tts.stop() == TextToSpeech.SUCCESS || unready; }
+        catch (RuntimeException ignored) { return unready; }
+    }
+    private void releaseSpeechEngine() {
+        ++ttsGeneration; ttsInitializing = false; localVoiceReady = false;
+        TextToSpeech old = tts; tts = null;
+        if (old != null) try { old.shutdown(); } catch (RuntimeException ignored) { }
     }
     private void recorderCancel() { recorder.cancel(); if (reply != null) reply.setText("口述回复"); }
     private void teardown() {
+        // If a ready engine cannot stop, shut it down as a best-effort fallback.
+        // Cleanup of the session and recorder must continue even if either API fails.
+        if (!cancelSpeech()) releaseSpeechEngine();
         transport.cancel(); recorderCancel(); busy = false; consentPending = false; transcript = "";
         insertionConfirmed = false; if (insert != null) insert.setText("插入到当前框");
         if (start != null) start.setText("启动助手");
-        if (tts != null) tts.stop();
     }
     private void stopWithReason() { stop(); setExpanded(true); output.setText("当前页面或消息已变化。请重新启动助手；未修改聊天草稿。"); }
     void stop() {
@@ -239,8 +294,9 @@ final class AssistantPanel {
         if (examples != null) examples.setVisibility(visibility);
     }
     void destroy() {
+        destroyed = true;
         stop(); handler.removeCallbacks(check);
-        if (tts != null) { tts.shutdown(); tts = null; }
+        releaseSpeechEngine();
         if (registered) { context.unregisterReceiver(locked); registered = false; }
     }
 }

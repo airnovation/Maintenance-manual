@@ -73,7 +73,11 @@ final class GeminiAssistantTransport implements AssistantGemini.Transport {
     private void submit(AssistantSession session, long token, JSONObject request, boolean explanation,
             AssistantGemini.Callback callback) {
         final String key = SecureSettings.getApiKey(context, "gemini");
-        if (key.isEmpty()) { main.post(() -> callback.done(token, null, null, "请先在现有键盘设置保存Gemini API Key。")); return; }
+        if (key.isEmpty()) {
+            main.post(() -> { if (session.active() && session.token() == token)
+                callback.done(token, null, null, "请先在现有键盘设置保存Gemini API Key。"); });
+            return;
+        }
         EXECUTOR.execute(() -> {
             String chinese = null, english = null, error = null;
             try {

@@ -9,3 +9,8 @@ java -cp "$out" com.airnovation.aivoicekeyboard.AssistantSafetyTest
 python3 tests/check-boundaries.py
 
 java tests/SyntaxCheck.java
+# Actual lifecycle/transport classes under deterministic, host-only Android fakes.
+# These exercise failure ordering without credentials, microphone or network access.
+sh tests/recorder/run-tests.sh
+sh tests/tts/run-tests.sh
+sh tests/transport/run-tests.sh
