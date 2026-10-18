@@ -1,3 +1,9 @@
+## v0.12: WhatsApp Business compatibility
+
+Fixes the v0.11 start gate that rejected WhatsApp Business. Exactly the standard and Business packages are allowed, with package-matched resource IDs and source-bound sessions. Unknown layouts still refuse capture; actual Business device layout validation is pending.
+
+This release uses a NEW one-time test certificate. It cannot install over the previous isolated test app. If Android reports a signature conflict, remove ONLY “AI Voice Keyboard - Isolated Test”, keep the original keyboard, and install this APK. Re-enter Gemini settings and manually enable the new test app’s keyboard/Accessibility permissions. No API key belongs in GitHub or chat.
+
 # AI Voice Keyboard - Isolated Test
 
 This is an explicitly requested, side-by-side development-signed test APK.

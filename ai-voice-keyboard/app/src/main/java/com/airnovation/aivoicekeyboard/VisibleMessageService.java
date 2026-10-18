@@ -112,9 +112,11 @@ public final class VisibleMessageService extends AccessibilityService {
             // Retrieve ONLY the focused application root, never any other window root.
             // The user's own IME may be active while WhatsApp retains input focus.
             root = focused.getRoot();
-            if (root == null || !AssistantSession.WHATSAPP.contentEquals(
-                    root.getPackageName() == null ? "" : root.getPackageName()))
+            String sourcePackage = root == null || root.getPackageName() == null ? "" : root.getPackageName().toString();
+            if (!AssistantSession.isWhatsApp(sourcePackage))
                 return fail("WhatsApp不是当前输入应用，未读取消息。");
+            if (!session.mayReadSource(token, sourcePackage, !compareOnly))
+                return fail("输入应用已切换，请重新启动助手；未读取新应用消息。");
             int currentWindowId = focused.getId(), currentLayer = focused.getLayer();
             Rect viewport = new Rect(); focused.getBoundsInScreen(viewport);
             int width = getResources().getDisplayMetrics().widthPixels;
@@ -140,9 +142,9 @@ public final class VisibleMessageService extends AccessibilityService {
             List<String> messages = new ArrayList<>();
             try {
                 int[] visited = {0};
-                collect(root, viewport, occlusions, found, sameWindowMasks, new ArrayList<>(), false, editorFound, visited);
+                collect(root, sourcePackage, viewport, occlusions, found, sameWindowMasks, new ArrayList<>(), false, editorFound, visited);
                 if (visited[0] >= 250) return fail("页面节点过多，无法完整检查遮挡；未读取消息。");
-                if (!editorFound[0]) return fail("未确认WhatsApp消息输入框；搜索、列表或未知页面不读取。");
+                if (!editorFound[0]) return fail("未识别当前WhatsApp/Business消息输入框。请点聊天底部输入框；搜索或未知版本布局不读取。");
                 found.sort(Comparator.comparingInt((NodeText n) -> n.top).thenComparingInt(n -> n.left));
                 for (NodeText node : found) {
                     boolean unobscured = AssistantNodeFilter.unobscured(box(node.bounds), box(node.clip), node.ancestors, sameWindowMasks);
@@ -155,7 +157,7 @@ public final class VisibleMessageService extends AccessibilityService {
             // It permits a bounded explanation; automatic insertion remains disabled.
             String snapshotBinding = "unverified-window:" + root.getWindowId();
             if (compareOnly && !bounded(messages).equals(session.visible(token))) return fail("当前可见消息已变化，请重新启动助手。");
-            if (!session.capture(token, AssistantSession.WHATSAPP, snapshotBinding, true, true, messages))
+            if (!session.capture(token, sourcePackage, snapshotBinding, true, true, messages))
                 return "会话已变化，请重新启动。";
             capturedWindowGeometry = windowGeometry(windows);
             return null;
@@ -175,7 +177,7 @@ public final class VisibleMessageService extends AccessibilityService {
         return out;
     }
     private String fail(String reason) { session.invalidate(); return reason; }
-    private void collect(AccessibilityNodeInfo node, Rect ancestorClip, List<Rect> occlusions,
+    private void collect(AccessibilityNodeInfo node, String sourcePackage, Rect ancestorClip, List<Rect> occlusions,
             List<NodeText> out, List<AssistantNodeFilter.Region> sameWindowMasks, List<Integer> ancestors, boolean insideConversation,
             boolean[] editorFound, int[] visited) {
         int nodeId = ++visited[0];
@@ -186,7 +188,7 @@ public final class VisibleMessageService extends AccessibilityService {
         Rect childClip = new Rect(ancestorClip);
         if (!childClip.intersect(bounds)) return;
         String pkg = node.getPackageName() == null ? "" : node.getPackageName().toString();
-        if (!AssistantSession.WHATSAPP.equals(pkg)) return;
+        if (!sourcePackage.equals(pkg) || !AssistantSession.isWhatsApp(pkg)) return;
         if (node.isPassword()) { sameWindowMasks.add(new AssistantNodeFilter.Region(nodeId, box(bounds))); return; }
         String id = node.getViewIdResourceName();
         String clazz = node.getClassName() == null ? "" : node.getClassName().toString();
@@ -198,10 +200,10 @@ public final class VisibleMessageService extends AccessibilityService {
         for (Rect covered : occlusions) if (Rect.intersects(bounds, covered)) { unobscured = false; break; }
         if (node.isEditable()) {
             sameWindowMasks.add(new AssistantNodeFilter.Region(nodeId, box(bounds)));
-            if (fullyInside && unobscured && "com.whatsapp:id/entry".equals(id) && node.isFocused()) editorFound[0] = true;
+            if (fullyInside && unobscured && AssistantSession.isResource(pkg, id, "entry") && node.isFocused()) editorFound[0] = true;
             return; // Never read the existing typed draft through Accessibility.
         }
-        boolean message = "com.whatsapp:id/message_text".equals(id);
+        boolean message = AssistantSession.isResource(pkg, id, "message_text");
         // Android can report an already-clipped screen rectangle. A smaller screen
         // size than the node's local size must never permit reading its full text.
         // Unequal/transformed/unknown geometry is rejected conservatively.
@@ -217,7 +219,7 @@ public final class VisibleMessageService extends AccessibilityService {
         for (int i = 0; i < node.getChildCount() && visited[0] < 250; i++) {
             AccessibilityNodeInfo child = node.getChild(i);
             if (child != null) try {
-                collect(child, childClip, occlusions, out, sameWindowMasks, childAncestors, inList, editorFound, visited);
+                collect(child, sourcePackage, childClip, occlusions, out, sameWindowMasks, childAncestors, inList, editorFound, visited);
             } finally { child.recycle(); }
         }
     }

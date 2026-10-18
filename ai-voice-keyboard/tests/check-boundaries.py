@@ -22,7 +22,10 @@ assert 'if (inList && AssistantNodeFilter.allowed' in service
 assert 'if (unobscured && node.node.getText()' in service
 assert 'AssistantNodeFilter.unobscured(' in service
 assert 'visited[0] >= 250' in service
-assert 'com.whatsapp:id/entry' in service
+assert 'AssistantSession.isResource(pkg, id, "entry")' in service
+assert 'AssistantSession.isResource(pkg, id, "message_text")' in service
+assert '!sourcePackage.equals(pkg) || !AssistantSession.isWhatsApp(pkg)' in service
+assert 'session.capture(token, sourcePackage,' in service
 # Regression checks for the narrowly scoped SystemUI status-bar exception.
 safe_status_bar = service.split('private boolean safeUnchangedStatusBarEvent')[1].split('private boolean unchangedStatusBarEvent')[0]
 status_bar = service.split('private boolean unchangedStatusBarEvent')[1].split('private String windowGeometry')[0]
@@ -47,6 +50,36 @@ assert re.search(r'if\s*\(\s*"com\.android\.systemui"\.equals\(pkg\)\s*&&\s*type
 assert callback.rfind('session.invalidate();') > callback.find('safeUnchangedStatusBarEvent(event)')
 capture = service.split('private String capture(')[1].split('private List<String> bounded')[0]
 assert capture.index('capturedWindowGeometry = windowGeometry(windows);') > capture.index('if (!session.capture(')
+# A switch between the two supported applications must fail BEFORE reading the
+# newly focused application's messages, not merely when storing the snapshot.
+read_source_guard = re.search(
+    r'if\s*\(!session\.mayReadSource\(token, sourcePackage, !compareOnly\)\)\s*return fail\([^;]+\);',
+    capture)
+assert read_source_guard, 'Capture must reject a mismatched session source package'
+assert capture.index('if (!AssistantSession.isWhatsApp(sourcePackage))') < read_source_guard.start()
+assert read_source_guard.end() < capture.index('collect(root, sourcePackage,')
+assert read_source_guard.end() < capture.index('.getText(')
+
+# Both applications are allowlisted, but a draft may only be inserted back into
+# the package captured by this token. Revalidate the current editor and connection
+# after Accessibility checks; accepting either package alone is insufficient.
+keyboard = (src/'VoiceKeyboardService.java').read_text()
+assistant_insert = keyboard.split('private String insertAssistantDraft(')[1].split('private void clearUndo(')[0]
+first_source_guard = re.search(
+    r'if\s*\(!assistant\.matchesSource\(token, editor\.packageName\)\)\s*return "[^"]+";',
+    assistant_insert)
+assert first_source_guard, 'Manual insertion must match the captured source package'
+assert assistant_insert.index('if (!VisibleMessageService.stillCurrent(token))') < first_source_guard.start()
+assert first_source_guard.end() < assistant_insert.index('InputConnection connection = getCurrentInputConnection();')
+assert assistant_insert.index('InputConnection connection = getCurrentInputConnection();') < assistant_insert.index('EditorInfo currentEditor = getCurrentInputEditorInfo();')
+fresh_guard = re.search(
+    r'if\s*\(connection != getCurrentInputConnection\(\)\s*\|\| token != assistant\.token\(\)'
+    r'\s*\|\| currentEditor == null\s*\|\| isSensitive\(currentEditor\)'
+    r'\s*\|\| !assistant\.matchesSource\(token, currentEditor\.packageName\)\)\s*return "[^"]+";',
+    assistant_insert)
+assert fresh_guard, 'Final insertion guard must recheck connection, token, editor, password and source package'
+assert assistant_insert.index('EditorInfo currentEditor = getCurrentInputEditorInfo();') < fresh_guard.start()
+assert fresh_guard.end() < assistant_insert.index('connection.commitText(english, 1)')
 # Local/screen size checks are eligibility gates before text access, never a substitute
 # for ancestor containment or same-window/external-window occlusion checks.
 collect = service.split('private void collect')[1].split('private static final class NodeText')[0]
@@ -67,6 +100,7 @@ assert '60000' in recorder and 'HttpURLConnection' not in recorder
 ns = '{http://schemas.android.com/apk/res/android}'
 xml = ET.parse(root/'res/xml/assistant_accessibility.xml').getroot()
 assert 'typeNotificationStateChanged' not in xml.attrib[ns+'accessibilityEventTypes']
+assert ns+'packageNames' not in xml.attrib  # Other-app navigation must still invalidate the session.
 assert 'flagRetrieveInteractiveWindows' in xml.attrib[ns+'accessibilityFlags']
 assert service.count('.getRoot()') == 1
 assert 'other.getRoot(' not in service  # Other windows supply geometry only, never text roots.

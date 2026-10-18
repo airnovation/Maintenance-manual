@@ -35,6 +35,77 @@ public final class AssistantPanelTtsTest {
             equal(recordingText, h.text(), "late init must not replace recording status");
         });
         if (args.length > 0 && "--regression-only".equals(args[0])) { report(); return; }
+        for (boolean darkDefaults : List.of(false, true)) run("fixed output contrast with " + (darkDefaults ? "dark" : "light") + " fake theme defaults", () -> {
+            // Deliberately vary inherited colors; this verifies explicit color wiring,
+            // not actual Android theme rendering or device contrast.
+            TextView.defaultTextColor = darkDefaults ? 0xFFFFFFFF : 0xFF222222;
+            View.defaultBackgroundColor = darkDefaults ? 0xFF111111 : 0x00000000;
+            Harness h = new Harness(false);
+            check(h.text().contains("助手默认关闭"), "initial status is tested before any transition");
+            fixedContrast(h.output, "initial status");
+            Harness.find(h.root, "启动助手").performClick();
+            equal("请在WhatsApp或WhatsApp Business普通消息输入框打开。助手未启动。", h.text(), "rejected editor names both supported apps");
+            fixedContrast(h.output, "not-started error");
+            h.panel.editorChanged(true);
+            clickShown(Harness.find(h.root, "启动助手"), "start before demo");
+            clickShown(Harness.find(h.root, "仅模拟演示（不联网）"), "demo"); Handler.drain();
+            check(h.text().contains("模拟消息，不含真实聊天"), "normal synthetic demo status is shown");
+            fixedContrast(h.output, "synthetic demo");
+            equal(0, h.recorder.startCalls, "demo starts no recording");
+            equal(0, TextToSpeech.instances.size(), "demo does not automatically initialize speech");
+        });
+        run("visible demo button renders fixture and reply while refusing real insertion", () -> {
+            Harness h = new Harness(false); h.panel.editorChanged(true); Handler.drain();
+            ScrollView scroll = (ScrollView)h.root.children.get(0);
+            check(!scroll.isShown() && !h.output.isShown(), "closed panel hides output through scroll ancestor");
+            clickShown(Harness.find(h.root, "启动助手"), "start");
+            check(h.text().contains("本次助手会话"), "start renders disclosure without capture");
+            clickShown(Harness.find(h.root, "仅模拟演示（不联网）"), "synthetic demo"); Handler.drain();
+            equal(View.VISIBLE, scroll.getVisibility(), "demo expands scroll");
+            equal(View.VISIBLE, h.output.getVisibility(), "demo output is visible");
+            check(scroll.isShown() && h.output.isShown(), "demo output has no hidden ancestor");
+            check(SESSION.active(), "demo button activates synthetic session");
+            check(h.text().contains("模拟消息，不含真实聊天"), "demo source is labeled synthetic");
+            check(h.text().contains("Are you available tomorrow at 3 pm?"), "preset English message is rendered");
+            check(h.text().contains("对方想知道你明天下午三点是否方便"), "preset Chinese explanation is rendered");
+            check(h.text().contains("口述回复按钮只展示模拟英文草稿"), "English-preview next step is explained");
+            check(h.text().contains("不读取、不录音、不联网"), "demo boundaries are visible");
+            fixedContrast(h.output, "rendered demo");
+            String english = "Thanks! I'll check my schedule and get back to you.";
+            equal(english, SESSION.draft(), "preset English draft is prepared locally");
+            clickShown(h.reply, "synthetic oral reply");
+            check(h.output.isShown() && scroll.isShown(), "oral preview remains visible");
+            check(h.text().contains("模拟口述意图：我先确认时间再回复你"), "reply renders preset Chinese intent");
+            check(h.text().contains("英文预览") && h.text().contains(english), "reply renders preset English preview");
+            check(h.text().contains("仅模拟，未录音或联网"), "reply remains labeled synthetic");
+            fixedContrast(h.output, "rendered synthetic reply");
+            Button insert = Harness.find(h.root, "插入到当前框");
+            clickShown(insert, "synthetic insert refusal");
+            check(h.text().contains("模拟演示不能插入真实聊天") && h.text().contains(english), "demo insert is refused with draft visible");
+            clickShown(insert, "repeated synthetic insert refusal");
+            check(h.text().contains("模拟演示不能插入真实聊天"), "repeated insert cannot bypass demo gate");
+            equal(0, h.manualInsertCalls, "no actual insertion callback is invoked");
+            equal(0, h.recorder.startCalls, "oral demo never starts recorder");
+            equal(0, h.recorder.finishCalls, "oral demo never finishes or uploads recorder");
+            check(!h.recorder.active, "demo recorder stays inactive");
+            equal(0, GeminiAssistantTransport.latest.requestCalls, "demo never requests transport");
+            equal(0, GeminiAssistantTransport.latest.transcribeCalls, "demo never transcribes audio");
+            equal(0, TextToSpeech.instances.size(), "demo does not automatically speak");
+            clickShown(Harness.find(h.root, "关闭"), "close demo");
+            check(!scroll.isShown() && !h.output.isShown(), "close hides demo output through scroll ancestor");
+            check(!SESSION.active(), "close clears demo session");
+        });
+        run("demo in disallowed editor renders a visible refusal", () -> {
+            Harness h = new Harness(false);
+            clickShown(Harness.find(h.root, "启动助手"), "start in disallowed editor");
+            clickShown(Harness.find(h.root, "仅模拟演示（不联网）"), "demo in disallowed editor");
+            check(h.output.isShown(), "refusal is visible instead of silently hidden");
+            check(h.text().contains("WhatsApp或WhatsApp Business") && h.text().contains("助手未启动"), "refusal explains supported message fields");
+            check(!SESSION.active(), "disallowed editor does not activate demo");
+            equal(0, h.recorder.startCalls, "refused demo does not record");
+            equal(0, GeminiAssistantTransport.latest.requestCalls, "refused demo does not request transport");
+            fixedContrast(h.output, "visible demo refusal");
+        });
         run("late initialization cannot revive after recording stops", () -> {
             Harness h = pending(); TextToSpeech engine = TextToSpeech.latest();
             h.record(); h.record(); String finished = h.text();
@@ -287,8 +358,20 @@ public final class AssistantPanelTtsTest {
     }
     private static Harness pending() throws Exception { Harness h = new Harness(); h.speak(); return h; }
     private static Harness ready() throws Exception { Harness h = pending(); TextToSpeech.latest().complete(0); Handler.drain(); return h; }
+    private static void clickShown(Button button, String name) {
+        check(button != null, name + " button exists in actual panel tree");
+        check(button.isShown(), name + " button has no hidden ancestor");
+        check(button.performClick(), name + " button has a wired click listener");
+    }
+    private static void fixedContrast(TextView output, String state) {
+        equal(0xFF000000, output.getCurrentTextColor(), state + " keeps opaque black text");
+        equal(0xFFFFFFFF, output.backgroundColor, state + " keeps opaque white background");
+        equal(1, output.textColorChanges, state + " does not override explicit foreground");
+        equal(1, output.backgroundColorChanges, state + " does not override explicit background");
+    }
     private static void run(String name, Checked body) throws Exception {
         Handler.reset(); TextToSpeech.reset(); SESSION.invalidate(); VisibleMessageService.current = true; active = null;
+        TextView.defaultTextColor = 0; View.defaultBackgroundColor = 0;
         try { body.run(); cases++; System.out.println("PASS " + name); }
         catch (Throwable failure) { throw new AssertionError("FAIL " + name + ": " + failure.getMessage(), failure); }
         finally { if (active != null) active.panel.destroy(); Handler.reset(); SESSION.invalidate(); }
@@ -308,15 +391,18 @@ public final class AssistantPanelTtsTest {
     }
     private static final class Harness {
         final Context context = new Context();
-        final AssistantPanel panel = new AssistantPanel(context, () -> false, (token, english) -> { throw new AssertionError("No insertion expected"); });
+        int manualInsertCalls;
+        final AssistantPanel panel = new AssistantPanel(context, () -> false, (token, english) -> { manualInsertCalls++; throw new AssertionError("No insertion expected"); });
         final LinearLayout root = new LinearLayout(context);
         final AssistantRecorder recorder = AssistantRecorder.latest;
         final Button speech, reply;
         final TextView output;
-        Harness() throws Exception {
-            active = this; panel.addTo(root); panel.editorChanged(true); Handler.drain();
+        Harness() throws Exception { this(true); }
+        Harness(boolean setupSession) throws Exception {
+            active = this; panel.addTo(root);
             output = (TextView)((ScrollView)root.children.get(0)).child;
-            speech = find(root, "中文朗读"); reply = find(root, "口述回复"); activate("Synthetic Chinese explanation");
+            speech = find(root, "中文朗读"); reply = find(root, "口述回复");
+            if (setupSession) { panel.editorChanged(true); Handler.drain(); activate("Synthetic Chinese explanation"); }
         }
         void activate(String explanation) throws Exception {
             long token = SESSION.start();

@@ -117,7 +117,7 @@ public class VoiceKeyboardService extends InputMethodService {
         assistantPanel.addTo(root);
         EditorInfo editor = getCurrentInputEditorInfo();
         assistantPanel.editorChanged(editor != null && !isSensitive(editor)
-                && AssistantSession.WHATSAPP.equals(editor.packageName));
+                && AssistantSession.isWhatsApp(editor.packageName));
         applySensitiveState();
         return root;
     }
@@ -143,7 +143,7 @@ public class VoiceKeyboardService extends InputMethodService {
         clearUndo();
         sensitiveField = isSensitive(attribute);
         if (assistantPanel != null) assistantPanel.editorChanged(attribute != null && !sensitiveField
-                && AssistantSession.WHATSAPP.equals(attribute.packageName));
+                && AssistantSession.isWhatsApp(attribute.packageName));
         if (preview != null) preview.setText("");
         if (insert != null) insert.setVisibility(View.GONE);
         if (preview != null) preview.setVisibility(View.GONE);
@@ -154,7 +154,7 @@ public class VoiceKeyboardService extends InputMethodService {
         super.onStartInputView(info, restarting);
         sensitiveField = isSensitive(info);
         if (assistantPanel != null) assistantPanel.editorChanged(info != null && !sensitiveField
-                && AssistantSession.WHATSAPP.equals(info.packageName));
+                && AssistantSession.isWhatsApp(info.packageName));
         applySensitiveState();
     }
 
@@ -448,14 +448,18 @@ public class VoiceKeyboardService extends InputMethodService {
         AssistantSession assistant = AssistantSession.INSTANCE;
         EditorInfo editor = getCurrentInputEditorInfo();
         if (recording || processingAudio || translating || sensitiveField || editor == null
-                || isSensitive(editor) || !AssistantSession.WHATSAPP.equals(editor.packageName)
+                || isSensitive(editor) || !AssistantSession.isWhatsApp(editor.packageName)
                 || !isInputViewShown() || !assistant.mayManuallyInsert(token, true))
             return "当前输入会话不可用，请重新核对后重试。";
         if (!VisibleMessageService.stillCurrent(token)) return "当前聊天页面已变化，请重新启动助手。";
+        if (!assistant.matchesSource(token, editor.packageName)) return "输入应用与消息来源不同，未插入。";
         InputConnection connection = getCurrentInputConnection();
         if (connection == null) return "没有当前输入框，未插入。";
         // Re-read the current connection after the last foreground/context check.
-        if (connection != getCurrentInputConnection() || token != assistant.token())
+        EditorInfo currentEditor = getCurrentInputEditorInfo();
+        if (connection != getCurrentInputConnection() || token != assistant.token()
+                || currentEditor == null || isSensitive(currentEditor)
+                || !assistant.matchesSource(token, currentEditor.packageName))
             return "输入焦点已变化，未插入。";
         String before = readChatDraft();
         try {

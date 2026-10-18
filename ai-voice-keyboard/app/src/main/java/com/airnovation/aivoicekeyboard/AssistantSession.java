@@ -9,10 +9,17 @@ public final class AssistantSession {
     public static final boolean VERIFIED_INSERT_ENABLED = false;
     public static final AssistantSession INSTANCE = new AssistantSession();
     public static final String WHATSAPP = "com.whatsapp";
+    public static final String WHATSAPP_BUSINESS = "com.whatsapp.w4b";
+    public static boolean isWhatsApp(String pkg) {
+        return WHATSAPP.equals(pkg) || WHATSAPP_BUSINESS.equals(pkg);
+    }
+    public static boolean isResource(String pkg, String id, String name) {
+        return isWhatsApp(pkg) && (pkg + ":id/" + name).equals(id);
+    }
     public static final int MAX_MESSAGES = 12, MAX_CHARS = 3000;
     private long generation;
     private boolean active;
-    private String windowIdentity;
+    private String windowIdentity, sourcePackage;
     private List<String> visible = Collections.emptyList();
     private String explanation = "", draft = "";
 
@@ -25,6 +32,7 @@ public final class AssistantSession {
         generation++;
         active = false;
         windowIdentity = null;
+        sourcePackage = null;
         visible = Collections.emptyList();
         explanation = "";
         draft = "";
@@ -34,13 +42,14 @@ public final class AssistantSession {
     public synchronized boolean capture(long token, String pkg, String identity,
             boolean focused, boolean unlocked, List<String> messages) {
         if (!active || token != generation) return false;
-        if (!WHATSAPP.equals(pkg) || !focused || !unlocked || identity == null || identity.isEmpty()) {
+        if (!isWhatsApp(pkg) || !focused || !unlocked || identity == null || identity.isEmpty()) {
             invalidate(); return false;
         }
-        if (windowIdentity != null && !windowIdentity.equals(identity)) {
+        if (windowIdentity != null && (!windowIdentity.equals(identity) || !pkg.equals(sourcePackage))) {
             invalidate(); return false;
         }
         windowIdentity = identity;
+        sourcePackage = pkg;
         ArrayList<String> bounded = new ArrayList<>();
         int chars = 0;
         for (String value : messages) {
@@ -67,6 +76,13 @@ public final class AssistantSession {
         if (chinese != null) explanation = chinese;
         if (english != null) draft = english;
         return true;
+    }
+    public synchronized boolean mayReadSource(long token, String pkg, boolean initialCapture) {
+        return active && token == generation && isWhatsApp(pkg)
+                && (sourcePackage == null ? initialCapture : sourcePackage.equals(pkg));
+    }
+    public synchronized boolean matchesSource(long token, String pkg) {
+        return active && token == generation && sourcePackage != null && sourcePackage.equals(pkg);
     }
     public synchronized void clearDraft() { draft = ""; }
     public synchronized String explanation() { return explanation; }

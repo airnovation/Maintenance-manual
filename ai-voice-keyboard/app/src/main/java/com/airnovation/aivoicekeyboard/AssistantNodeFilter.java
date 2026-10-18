@@ -30,7 +30,7 @@ public final class AssistantNodeFilter {
     }
     public static boolean allowed(String pkg, String id, boolean visible,
             boolean editable, boolean password, boolean intersectsViewport) {
-        return AssistantSession.WHATSAPP.equals(pkg) && visible && intersectsViewport
-                && !editable && !password && "com.whatsapp:id/message_text".equals(id);
+        return AssistantSession.isWhatsApp(pkg) && visible && intersectsViewport
+                && !editable && !password && AssistantSession.isResource(pkg, id, "message_text");
     }
 }

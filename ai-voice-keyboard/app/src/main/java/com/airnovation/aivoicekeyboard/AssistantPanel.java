@@ -67,6 +67,8 @@ final class AssistantPanel {
     }
     void addTo(LinearLayout root) {
         output = new TextView(context); output.setTextSize(14); output.setTextIsSelectable(true);
+        // Keep preview/error text legible independently of the host's light/dark theme.
+        output.setTextColor(0xFF000000); output.setBackgroundColor(0xFFFFFFFF);
         output.setText("助手默认关闭 · 普通Gemini API · 中文离线朗读 · 回复仅预览");
         scroll = new ScrollView(context); scroll.addView(output);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, (int)(140 * context.getResources().getDisplayMetrics().density)));
@@ -99,7 +101,7 @@ final class AssistantPanel {
     void editorChanged(boolean whatsappNonSensitive) { stop(); allowedEditor = whatsappNonSensitive; }
     private boolean readyEditor() {
         setExpanded(true);
-        if (!allowedEditor) { output.setText("请在WhatsApp普通消息输入框打开。助手未启动。"); return false; }
+        if (!allowedEditor) { output.setText("请在WhatsApp或WhatsApp Business普通消息输入框打开。助手未启动。"); return false; }
         if (legacyBusy.getAsBoolean()) { output.setText("请先结束现有Mic/EN操作，再启动助手。"); return false; }
         return true;
     }
