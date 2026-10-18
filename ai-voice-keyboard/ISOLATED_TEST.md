@@ -1,3 +1,13 @@
+## v0.13: local capture diagnosis
+
+Adds “本机诊断（不读文字）”, a separate metadata-only action. It displays counts for recognized message nodes and visibility/filter stages. It never calls node getText, Gemini, microphone or insertion; the temporary session is invalidated immediately. Ordinary assistant operation is unchanged.
+
+For this diagnosis, no Gemini API key is needed. Manually enable the new isolated keyboard and its Accessibility service, open the WhatsApp Business message input, choose this keyboard, open the assistant panel, then tap “本机诊断（不读文字）”. Share only the lower diagnostic-number region, not the conversation above it.
+
+This is a diagnostic build, not a claim that real WhatsApp message extraction has been repaired. No caption ID or broad text fallback was added.
+
+The new one-time certificate cannot update the previous isolated test APK. Replace only “AI Voice Keyboard - Isolated Test” if Android reports a signature conflict, keep the original keyboard. No app is removed automatically. Gemini settings are needed only when returning to the ordinary online assistant features.
+
 ## v0.12: WhatsApp Business compatibility
 
 Fixes the v0.11 start gate that rejected WhatsApp Business. Exactly the standard and Business packages are allowed, with package-matched resource IDs and source-bound sessions. Unknown layouts still refuse capture; actual Business device layout validation is pending.

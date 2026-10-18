@@ -106,6 +106,119 @@ public final class AssistantPanelTtsTest {
             equal(0, GeminiAssistantTransport.latest.requestCalls, "refused demo does not request transport");
             fixedContrast(h.output, "visible demo refusal");
         });
+        run("local diagnostic click displays metadata and ends its session", () -> {
+            Harness h = diagnosticHarness();
+            clickShown(Harness.find(h.root, "本机诊断（不读文字）"), "local diagnostic");
+            equal(1, VisibleMessageService.diagnosticCalls, "only explicit diagnostic entry is called");
+            check(VisibleMessageService.diagnosticSawEmptySession, "diagnostic receives fresh context-free session");
+            equal(VisibleMessageService.diagnosticResult, h.text(), "metadata report is displayed unchanged");
+            check(h.text().contains("窗口数量：2") && h.text().contains("节点数量：18") && h.text().contains("消息候选：3"), "synthetic counts are visible");
+            fixedContrast(h.output, "local diagnostic report");
+            diagnosticQuiet(h);
+            Handler.tick(); equal(VisibleMessageService.diagnosticResult, h.text(), "timer preserves finished diagnostic report");
+            equal("启动助手", Harness.find(h.root, "启动助手").getText().toString(), "prior reading consent is reset");
+        });
+        run("repeated local diagnostics get new one-shot sessions", () -> {
+            Harness h = diagnosticHarness(); Button diagnostic = Harness.find(h.root, "本机诊断（不读文字）");
+            clickShown(diagnostic, "first diagnostic"); long firstToken = VisibleMessageService.lastDiagnosticToken;
+            VisibleMessageService.diagnosticResult = "本机诊断（不读文字）\n窗口数量：1\n节点数量：7\n消息候选：0";
+            clickShown(diagnostic, "second diagnostic");
+            equal(2, VisibleMessageService.diagnosticCalls, "each explicit click runs once");
+            check(VisibleMessageService.lastDiagnosticToken != firstToken, "repeated diagnostic does not reuse old session token");
+            equal(VisibleMessageService.diagnosticResult, h.text(), "latest count report replaces older report");
+            diagnosticQuiet(h); Handler.tick(); equal(VisibleMessageService.diagnosticResult, h.text(), "timer preserves latest report");
+        });
+        run("unavailable diagnostic service gives visible setup guidance", () -> {
+            Harness h = diagnosticHarness(); VisibleMessageService.serviceAvailable = false;
+            clickShown(Harness.find(h.root, "本机诊断（不读文字）"), "unavailable diagnostic");
+            equal(0, VisibleMessageService.diagnosticCalls, "unavailable service is not called");
+            check(h.text().contains("本机诊断需要先启用无障碍服务") && h.text().contains("权限设置"), "missing service is explained visibly");
+            String guidance = h.text(); diagnosticQuiet(h); Handler.tick(); equal(guidance, h.text(), "timer preserves service guidance");
+        });
+        run("diagnostic refuses a disallowed editor without inspecting metadata", () -> {
+            Harness h = new Harness(false);
+            clickShown(Harness.find(h.root, "启动助手"), "start in unsupported editor");
+            clickShown(Harness.find(h.root, "本机诊断（不读文字）"), "diagnostic in unsupported editor");
+            equal(0, VisibleMessageService.diagnosticCalls, "editor rejection prevents diagnostics");
+            check(h.text().contains("WhatsApp或WhatsApp Business") && h.text().contains("助手未启动"), "unsupported editor refusal is explicit");
+            diagnosticQuiet(h);
+        });
+        run("diagnostic refuses while legacy microphone or EN work is busy", () -> {
+            Harness h = new Harness(false); h.panel.editorChanged(true); h.legacyBusy = true;
+            clickShown(Harness.find(h.root, "启动助手"), "start while legacy busy");
+            clickShown(Harness.find(h.root, "本机诊断（不读文字）"), "diagnostic while legacy busy");
+            equal(0, VisibleMessageService.diagnosticCalls, "legacy work prevents diagnostic start");
+            check(h.text().contains("请先结束现有Mic/EN操作"), "legacy busy refusal is explicit");
+            diagnosticQuiet(h);
+        });
+        run("diagnostic exception clears session and shows bounded failure", () -> {
+            Harness h = diagnosticHarness(); VisibleMessageService.diagnosticThrows = true; VisibleMessageService.diagnosticInvalidates = false;
+            clickShown(Harness.find(h.root, "本机诊断（不读文字）"), "throwing diagnostic");
+            equal(1, VisibleMessageService.diagnosticCalls, "one failed attempt only");
+            check(h.text().contains("本机诊断失败，已结束会话"), "diagnostic failure is explicit");
+            check(!h.text().contains("synthetic diagnostic failure"), "raw exception details are not displayed");
+            String failure = h.text(); diagnosticQuiet(h); Handler.tick(); equal(failure, h.text(), "timer preserves diagnostic failure");
+        });
+        run("panel invalidates even if diagnostic service forgets cleanup", () -> {
+            Harness h = diagnosticHarness(); VisibleMessageService.diagnosticInvalidates = false;
+            clickShown(Harness.find(h.root, "本机诊断（不读文字）"), "diagnostic cleanup defense");
+            equal(VisibleMessageService.diagnosticResult, h.text(), "report survives panel-owned cleanup");
+            diagnosticQuiet(h);
+        });
+        for (boolean nullReport : List.of(false, true)) run((nullReport ? "null" : "empty") + " diagnostic report fails visibly and clears session", () -> {
+            Harness h = diagnosticHarness(); VisibleMessageService.diagnosticResult = nullReport ? null : "";
+            clickShown(Harness.find(h.root, "本机诊断（不读文字）"), "empty diagnostic");
+            check(h.text().contains("本机诊断未返回结果"), "missing report does not look like a nonresponsive button");
+            diagnosticQuiet(h); String failure = h.text(); Handler.tick(); equal(failure, h.text(), "timer preserves empty-report guidance");
+        });
+        run("diagnostic cancels old pending speech and synthetic context", () -> {
+            Harness h = diagnosticHarness();
+            clickShown(Harness.find(h.root, "仅模拟演示（不联网）"), "demo before diagnostic");
+            h.speak(); TextToSpeech engine = TextToSpeech.latest(); int previousCurrentCalls = VisibleMessageService.currentCalls;
+            clickShown(Harness.find(h.root, "本机诊断（不读文字）"), "diagnostic after pending speech");
+            check(VisibleMessageService.diagnosticSawEmptySession, "old demo content is cleared before metadata inspection");
+            equal(previousCurrentCalls, VisibleMessageService.currentCalls, "diagnostics never use current-snapshot text validation");
+            engine.complete(TextToSpeech.SUCCESS); Handler.drain();
+            equal(0, engine.speakCalls, "late speech initialization cannot read diagnostic output or old context");
+            equal(VisibleMessageService.diagnosticResult, h.text(), "late speech callback preserves report");
+            diagnosticQuiet(h);
+        });
+        run("diagnostic cancels an existing recording without uploading", () -> {
+            Harness h = new Harness(); h.record(); check(h.recorder.active, "synthetic recording was active before diagnostic click");
+            int previousCurrentCalls = VisibleMessageService.currentCalls;
+            clickShown(Harness.find(h.root, "本机诊断（不读文字）"), "diagnostic after recording");
+            check(!h.recorder.active && !SESSION.active(), "diagnostic ends recording and session");
+            equal(1, h.recorder.startCalls, "diagnostic starts no additional recording");
+            equal(0, h.recorder.finishCalls, "diagnostic cancels instead of completing audio");
+            equal(0, GeminiAssistantTransport.latest.requestCalls, "no explanation request after diagnostic");
+            equal(0, GeminiAssistantTransport.latest.transcribeCalls, "cancelled recording is not uploaded");
+            equal(0, h.manualInsertCalls, "diagnostic does not insert");
+            equal(0, VisibleMessageService.captureCalls, "diagnostic does not capture messages");
+            equal(previousCurrentCalls, VisibleMessageService.currentCalls, "diagnostic does not validate message text");
+            check(VisibleMessageService.diagnosticSawEmptySession, "recording context is cleared before metadata inspection");
+            equal(VisibleMessageService.diagnosticResult, h.text(), "metadata report remains visible");
+        });
+        run("completed diagnostic does not authorize speech recording insertion or reading", () -> {
+            Harness h = diagnosticHarness();
+            clickShown(Harness.find(h.root, "本机诊断（不读文字）"), "one-shot diagnostic");
+            clickShown(h.reply, "reply after diagnostic"); check(h.text().contains("请先启动助手"), "diagnostic alone cannot start a reply");
+            clickShown(h.speech, "speech after diagnostic"); check(h.text().contains("请先取得中文解释"), "counts are not spoken as an explanation");
+            clickShown(Harness.find(h.root, "插入到当前框"), "insert after diagnostic");
+            check(h.text().contains("请先完成回复预览"), "counts cannot become an insertion draft");
+            equal(0, TextToSpeech.instances.size(), "diagnostic does not initialize speech");
+            diagnosticQuiet(h);
+            clickShown(Harness.find(h.root, "启动助手"), "fresh start after diagnostic");
+            check(h.text().contains("本次助手会话") && Harness.find(h.root, "同意并读取") != null, "ordinary read still requires its own disclosure and consent click");
+            equal(0, VisibleMessageService.captureCalls, "new reading consent is not bypassed");
+            equal(0, GeminiAssistantTransport.latest.requestCalls, "diagnostic never falls through to explain");
+        });
+        run("destroyed diagnostic listener cannot inspect a new session", () -> {
+            Harness h = diagnosticHarness(); Button diagnostic = Harness.find(h.root, "本机诊断（不读文字）");
+            h.panel.destroy(); h.activate("Synthetic replacement explanation"); long token = SESSION.token();
+            diagnostic.performClick();
+            equal(0, VisibleMessageService.diagnosticCalls, "destroyed listener does no metadata work");
+            check(SESSION.active() && token == SESSION.token(), "destroyed listener leaves replacement session unchanged");
+        });
         run("late initialization cannot revive after recording stops", () -> {
             Harness h = pending(); TextToSpeech engine = TextToSpeech.latest();
             h.record(); h.record(); String finished = h.text();
@@ -358,6 +471,23 @@ public final class AssistantPanelTtsTest {
     }
     private static Harness pending() throws Exception { Harness h = new Harness(); h.speak(); return h; }
     private static Harness ready() throws Exception { Harness h = pending(); TextToSpeech.latest().complete(0); Handler.drain(); return h; }
+    private static Harness diagnosticHarness() throws Exception {
+        Harness h = new Harness(false); h.panel.editorChanged(true); Handler.drain();
+        clickShown(Harness.find(h.root, "启动助手"), "start before local diagnostic");
+        return h;
+    }
+    private static void diagnosticQuiet(Harness h) {
+        check(h.output.isShown(), "diagnostic outcome is visible through its ancestors");
+        check(!SESSION.active(), "diagnostic leaves no active assistant session");
+        check(SESSION.explanation().isEmpty() && SESSION.draft().isEmpty(), "diagnostic leaves no explanation or insertion draft");
+        equal(0, h.recorder.startCalls, "diagnostic never records audio");
+        equal(0, h.recorder.finishCalls, "diagnostic never finishes audio for upload");
+        equal(0, GeminiAssistantTransport.latest.requestCalls, "diagnostic never requests Gemini explanation");
+        equal(0, GeminiAssistantTransport.latest.transcribeCalls, "diagnostic never transcribes audio");
+        equal(0, h.manualInsertCalls, "diagnostic never inserts content");
+        equal(0, VisibleMessageService.captureCalls, "diagnostic never calls message capture");
+        equal(0, VisibleMessageService.currentCalls, "diagnostic never revalidates message text");
+    }
     private static void clickShown(Button button, String name) {
         check(button != null, name + " button exists in actual panel tree");
         check(button.isShown(), name + " button has no hidden ancestor");
@@ -370,7 +500,7 @@ public final class AssistantPanelTtsTest {
         equal(1, output.backgroundColorChanges, state + " does not override explicit background");
     }
     private static void run(String name, Checked body) throws Exception {
-        Handler.reset(); TextToSpeech.reset(); SESSION.invalidate(); VisibleMessageService.current = true; active = null;
+        Handler.reset(); TextToSpeech.reset(); SESSION.invalidate(); VisibleMessageService.reset(); active = null;
         TextView.defaultTextColor = 0; View.defaultBackgroundColor = 0;
         try { body.run(); cases++; System.out.println("PASS " + name); }
         catch (Throwable failure) { throw new AssertionError("FAIL " + name + ": " + failure.getMessage(), failure); }
@@ -392,7 +522,8 @@ public final class AssistantPanelTtsTest {
     private static final class Harness {
         final Context context = new Context();
         int manualInsertCalls;
-        final AssistantPanel panel = new AssistantPanel(context, () -> false, (token, english) -> { manualInsertCalls++; throw new AssertionError("No insertion expected"); });
+        boolean legacyBusy;
+        final AssistantPanel panel = new AssistantPanel(context, () -> legacyBusy, (token, english) -> { manualInsertCalls++; throw new AssertionError("No insertion expected"); });
         final LinearLayout root = new LinearLayout(context);
         final AssistantRecorder recorder = AssistantRecorder.latest;
         final Button speech, reply;

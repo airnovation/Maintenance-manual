@@ -28,6 +28,13 @@ public final class VisibleMessageService extends AccessibilityService {
         if (connected == null) return "请先手动启用输入助手的无障碍服务；未读取或上传。";
         return connected.capture(token, false);
     }
+    /** Explicit local diagnostics: no node text access and no provider call. */
+    static String diagnose(long token) {
+        try {
+            if (connected == null) return "无障碍服务未连接；本机诊断未读取文字。";
+            return connected.capture(token, false, true);
+        } finally { AssistantSession.INSTANCE.invalidate(); }
+    }
     static boolean stillCurrent(long token) {
         return connected != null && connected.capture(token, true) == null;
     }
@@ -87,6 +94,9 @@ public final class VisibleMessageService extends AccessibilityService {
         session.invalidate();
     }
     private String capture(long token, boolean compareOnly) {
+        return capture(token, compareOnly, false);
+    }
+    private String capture(long token, boolean compareOnly, boolean metadataOnly) {
         if (!session.active() || session.token() != token) return "会话已结束，请重新启动。";
         KeyguardManager keyguard = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
         if (keyguard == null || keyguard.isKeyguardLocked()) return fail("屏幕已锁定。");
@@ -140,19 +150,27 @@ public final class VisibleMessageService extends AccessibilityService {
             List<AssistantNodeFilter.Region> sameWindowMasks = new ArrayList<>();
             boolean[] editorFound = {false};
             List<String> messages = new ArrayList<>();
+            AssistantCaptureDiagnostics diagnostics = new AssistantCaptureDiagnostics();
+            int[] visited = {0};
             try {
-                int[] visited = {0};
-                collect(root, sourcePackage, viewport, occlusions, found, sameWindowMasks, new ArrayList<>(), false, editorFound, visited);
+                collect(root, sourcePackage, viewport, occlusions, found, sameWindowMasks, new ArrayList<>(), false, editorFound, visited, diagnostics);
                 if (visited[0] >= 250) return fail("页面节点过多，无法完整检查遮挡；未读取消息。");
                 if (!editorFound[0]) return fail("未识别当前WhatsApp/Business消息输入框。请点聊天底部输入框；搜索或未知版本布局不读取。");
+                diagnostics.candidates = found.size();
                 found.sort(Comparator.comparingInt((NodeText n) -> n.top).thenComparingInt(n -> n.left));
                 for (NodeText node : found) {
                     boolean unobscured = AssistantNodeFilter.unobscured(box(node.bounds), box(node.clip), node.ancestors, sameWindowMasks);
                     // Only after both clipping and known same-window overlap checks, access message text.
-                    if (unobscured && node.node.getText() != null) messages.add(node.node.getText().toString());
+                    if (!unobscured) { diagnostics.sameWindowOverlap++; continue; }
+                    diagnostics.eligible++;
+                    if (metadataOnly) continue; // Never access text in local diagnostics.
+                    CharSequence text = node.node.getText();
+                    if (text == null) diagnostics.missingText++;
+                    else messages.add(text.toString());
                 }
             } finally { for (NodeText node : found) node.node.recycle(); }
-            if (messages.isEmpty()) return fail("当前可见消息未提供可识别文字。图片、语音和未知布局暂不支持。");
+            if (metadataOnly) return fail(diagnostics.metadataResult(visited[0]));
+            if (messages.isEmpty()) return fail(diagnostics.emptyResult(visited[0]));
             // This is an ephemeral window binding, NOT proof of unique chat identity.
             // It permits a bounded explanation; automatic insertion remains disabled.
             String snapshotBinding = "unverified-window:" + root.getWindowId();
@@ -179,7 +197,7 @@ public final class VisibleMessageService extends AccessibilityService {
     private String fail(String reason) { session.invalidate(); return reason; }
     private void collect(AccessibilityNodeInfo node, String sourcePackage, Rect ancestorClip, List<Rect> occlusions,
             List<NodeText> out, List<AssistantNodeFilter.Region> sameWindowMasks, List<Integer> ancestors, boolean insideConversation,
-            boolean[] editorFound, int[] visited) {
+            boolean[] editorFound, int[] visited, AssistantCaptureDiagnostics diagnostics) {
         int nodeId = ++visited[0];
         if (nodeId > 250 || !node.isVisibleToUser()) return;
         Rect bounds = new Rect(); node.getBoundsInScreen(bounds);
@@ -192,10 +210,12 @@ public final class VisibleMessageService extends AccessibilityService {
         if (node.isPassword()) { sameWindowMasks.add(new AssistantNodeFilter.Region(nodeId, box(bounds))); return; }
         String id = node.getViewIdResourceName();
         String clazz = node.getClassName() == null ? "" : node.getClassName().toString();
-        boolean inList = insideConversation || "android.widget.ListView".equals(clazz)
+        boolean knownList = "android.widget.ListView".equals(clazz)
                 || "android.widget.ScrollView".equals(clazz)
                 || "androidx.recyclerview.widget.RecyclerView".equals(clazz)
                 || "android.support.v7.widget.RecyclerView".equals(clazz);
+        diagnostics.structure(id != null && !id.isEmpty(), knownList);
+        boolean inList = insideConversation || knownList;
         boolean unobscured = true;
         for (Rect covered : occlusions) if (Rect.intersects(bounds, covered)) { unobscured = false; break; }
         if (node.isEditable()) {
@@ -210,6 +230,7 @@ public final class VisibleMessageService extends AccessibilityService {
         Rect localBounds = new Rect();
         if (message) node.getBoundsInParent(localBounds);
         boolean originalSize = !message || AssistantNodeFilter.sameUnclippedSize(box(bounds), box(localBounds));
+        if (message) diagnostics.candidate(inList, fullyInside, unobscured, originalSize);
         // Treat every overlapping non-ancestor UI region as potential same-window occlusion.
         // Transparent/lower-layer siblings may cause conservative refusal rather than a hidden read.
         if (!message) sameWindowMasks.add(new AssistantNodeFilter.Region(nodeId, box(bounds)));
@@ -219,7 +240,7 @@ public final class VisibleMessageService extends AccessibilityService {
         for (int i = 0; i < node.getChildCount() && visited[0] < 250; i++) {
             AccessibilityNodeInfo child = node.getChild(i);
             if (child != null) try {
-                collect(child, sourcePackage, childClip, occlusions, out, sameWindowMasks, childAncestors, inList, editorFound, visited);
+                collect(child, sourcePackage, childClip, occlusions, out, sameWindowMasks, childAncestors, inList, editorFound, visited, diagnostics);
             } finally { child.recycle(); }
         }
     }

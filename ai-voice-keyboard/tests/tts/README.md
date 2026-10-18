@@ -13,7 +13,7 @@ fakes never open a microphone, write audio, read messages/credentials, or make a
 network request. Unexpected capture, insertion, credential access, and transport
 calls fail the test.
 
-Coverage: 52 cases / 231 assertions, including the original same-session race;
+Coverage: 65 cases / 485 assertions, including the original same-session race;
 record-start failure; start/stop/timeout; late success/failure; repeated taps;
 explicit retry; stale session/snapshot; lock/editor/close/destroy; offline Chinese
 voice selection; engine method exceptions/ERROR results; UI-thread dispatch;
@@ -26,6 +26,15 @@ ancestor visibility: allowed editor -> Start -> visible Demo -> synthetic oral
 reply -> repeated insertion refusal -> Close. They assert displayed preset text,
 Chinese explanation, English-preview instructions, and English reply; zero
 recorder/transport/insertion calls; and a visible refusal in a disallowed editor.
+
+Thirteen local-diagnostic scenarios exercise the actual metadata-only button
+listener with a synthetic count report. They cover visible output, one-shot
+session cleanup, timer persistence, repeated clicks, missing service, unsupported
+editor, legacy-work refusal, exceptions/empty reports, cancellation of old speech
+and recording, and refusal to reuse diagnosis as reading consent or a reply draft.
+The fake records calls and fails on message capture, credential access, Gemini
+requests, audio uploads, and real insertion. These tests verify panel routing;
+the real Accessibility metadata collector requires separate verification.
 
 ## Before/after control
 
@@ -40,7 +49,7 @@ fails the first actual-panel test with exit code 1:
 
     late init must not speak after microphone starts; expected=0, actual=1
 
-The fixed panel passes the same test and all 52 cases. The baseline is not copied
+The fixed panel passes the same test and all 65 cases. The baseline is not copied
 into this directory; `TTS_PANEL_SOURCE` points at a separate preserved snapshot.
 
 ## Limits
@@ -49,7 +58,8 @@ These are offline logic and lifecycle tests, not Android instrumentation or
 acoustic tests. Color properties verify explicit production wiring; they do not
 prove real-device light/dark theme rendering, accessibility contrast, or screenshots.
 The fake view tree models visibility through parents; it does not lay out pixels
-or prove real-device hit targets, clipping, window attachment, or touch delivery. Fake stop success models an engine acknowledging stop; the tests
+or prove real-device hit targets, clipping, window attachment, or touch delivery.
+Fake stop success models an engine acknowledging stop; the tests
 do not establish when real speaker output becomes inaudible, audio latency, echo,
 OEM TTS behavior, installed Chinese voice availability, or microphone quality.
 If stop fails for a ready engine, recording is refused. Teardown then attempts

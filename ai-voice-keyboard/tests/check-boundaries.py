@@ -19,7 +19,12 @@ assert 'getMagnificationController().getScale()' in service
 assert 'ancestorClip.contains(bounds)' in service
 assert 'childClip.intersect(bounds)' in service
 assert 'if (inList && AssistantNodeFilter.allowed' in service
-assert 'if (unobscured && node.node.getText()' in service
+assert 'if (!unobscured) { diagnostics.sameWindowOverlap++; continue; }' in service
+assert 'if (metadataOnly) continue;' in service
+assert service.index('if (metadataOnly) continue;') < service.index('CharSequence text = node.node.getText();')
+assert service.index('if (metadataOnly) return fail(diagnostics.metadataResult(visited[0]));') < service.index('if (!session.capture(')
+assert 'return connected.capture(token, false, true);' in service
+assert 'finally { AssistantSession.INSTANCE.invalidate(); }' in service
 assert 'AssistantNodeFilter.unobscured(' in service
 assert 'visited[0] >= 250' in service
 assert 'AssistantSession.isResource(pkg, id, "entry")' in service
@@ -48,7 +53,7 @@ assert 'java.util.Collections.sort(parts)' in geometry
 import re
 assert re.search(r'if\s*\(\s*"com\.android\.systemui"\.equals\(pkg\)\s*&&\s*type == AccessibilityEvent\.TYPE_WINDOW_CONTENT_CHANGED\s*&&\s*safeUnchangedStatusBarEvent\(event\)\s*\)\s*return;', callback)
 assert callback.rfind('session.invalidate();') > callback.find('safeUnchangedStatusBarEvent(event)')
-capture = service.split('private String capture(')[1].split('private List<String> bounded')[0]
+capture = service.split('private String capture(long token, boolean compareOnly, boolean metadataOnly) {')[1].split('private List<String> bounded')[0]
 assert capture.index('capturedWindowGeometry = windowGeometry(windows);') > capture.index('if (!session.capture(')
 # A switch between the two supported applications must fail BEFORE reading the
 # newly focused application's messages, not merely when storing the snapshot.

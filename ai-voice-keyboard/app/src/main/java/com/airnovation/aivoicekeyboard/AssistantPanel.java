@@ -85,6 +85,7 @@ final class AssistantPanel {
         insert = button(actions, "插入到当前框", this::confirmInsert);
         examples = new LinearLayout(context); root.addView(examples);
         button(examples, "仅模拟演示（不联网）", this::startDemo);
+        button(examples, "本机诊断（不读文字）", this::diagnose);
         if (!registered) {
             IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
             if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(locked, filter, Context.RECEIVER_NOT_EXPORTED);
@@ -207,6 +208,30 @@ final class AssistantPanel {
             if (session.accept(id, chinese, english)) output.setText("模拟消息，不含真实聊天：\nAre you available tomorrow at 3 pm?\n\n" + chinese
                     + "\n\n口述回复按钮只展示模拟英文草稿。此演示不读取、不录音、不联网。");
         });
+    }
+    private void diagnose() {
+        if (destroyed || !readyEditor()) return;
+        stop(); setExpanded(true);
+        if (!VisibleMessageService.available()) {
+            output.setText("本机诊断需要先启用无障碍服务。请点“权限设置”，自行启用"
+                    + (context.getPackageName().endsWith(".assistanttest") ? "Input Assistant - Isolated Test" : "Optional Input Assistant")
+                    + "后重试。当前未读取文字、录音或联网。");
+            return;
+        }
+        String report;
+        try {
+            long token = session.start(); shownToken = token;
+            // This is a metadata-only path, separate from capture/explain/recording.
+            report = VisibleMessageService.diagnose(token);
+            if (report == null || report.isEmpty()) report = "本机诊断未返回结果。未读取文字、录音或联网，请重试。";
+        } catch (RuntimeException ignored) {
+            report = "本机诊断失败，已结束会话。未读取文字、录音或联网，请重试。";
+        } finally {
+            // The service also invalidates its diagnostic session. Keep the panel
+            // fail-closed on exceptions and do not let the timer erase the report.
+            session.invalidate(); shownToken = session.token();
+        }
+        output.setText(report);
     }
     private void speak() {
         if (destroyed) return;
