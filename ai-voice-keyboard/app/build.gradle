@@ -28,6 +28,15 @@ android {
         }
     }
     buildTypes {
+        // Explicitly authorized one-off side-by-side test. Never use this identity
+        // for the original application or promise long-term install-over updates.
+        isolatedTest {
+            initWith release
+            applicationIdSuffix '.assistanttest'
+            versionNameSuffix '-isolated-test'
+            debuggable false
+            signingConfig signingConfigs.debug
+        }
         debug {
             if (System.getenv("AE_SIGNING_FILE")) {
                 signingConfig signingConfigs.stableTest

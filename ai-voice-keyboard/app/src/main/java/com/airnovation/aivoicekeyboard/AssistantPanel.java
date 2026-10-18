@@ -110,7 +110,9 @@ final class AssistantPanel {
             output.setText("本次助手会话：只读取WhatsApp当前屏幕可见的文字消息（最多12条、3000字符），发送给Gemini做中文解释和回复校对。文本中可能包含其他人的信息。不会读取历史、通知、截图或附件，不滚动，不自动发送。\n\n口述回复只在你按下后录音；按停止时将录音发给Gemini转写，并连同本次消息生成英文预览。仅使用设备现有Gemini配置。关闭、锁屏或页面变化会结束会话；已发出的请求不能撤回。\n\n只有你手动启用系统无障碍权限后才能读取；该系统权限本身不限于WhatsApp。点击“同意并读取”开始本次会话，或“关闭”取消。请先用无敏感信息的测试聊天验证。");
             return;
         }
-        if (!VisibleMessageService.available()) { output.setText("尚未启用无障碍服务。请点“权限设置”，自行启用Optional Input Assistant，再返回重新确认。当前未读取或上传。"); return; }
+        if (!VisibleMessageService.available()) { output.setText("尚未启用无障碍服务。请点“权限设置”，自行启用"
+                + (context.getPackageName().endsWith(".assistanttest") ? "Input Assistant - Isolated Test" : "Optional Input Assistant")
+                + "，再返回重新确认。当前未读取或上传。"); return; }
         if (!"gemini".equals(context.getSharedPreferences("voice_keyboard_settings", Context.MODE_PRIVATE)
                 .getString("selected_provider", "openai"))) { output.setText("助手仅使用Gemini。请先在现有键盘设置选择Gemini，不会自动切换服务商。"); return; }
         if (SecureSettings.getApiKey(context, "gemini").isEmpty()) { output.setText("请先在现有键盘设置保存Gemini API Key；不要把密钥发到聊天。"); return; }

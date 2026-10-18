@@ -1,0 +1,66 @@
+name: Build isolated assistant test (one-off development signature)
+
+on:
+  push:
+    branches: [prototype/ai-voice-keyboard]
+    paths:
+      - 'ai-voice-keyboard/**'
+      - '.github/workflows/build-isolated-assistant-test.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: isolated-assistant-test-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  isolated-test:
+    # An explicit release-intent marker prevents routine source pushes publishing.
+    if: contains(github.event.head_commit.message, '[isolated-test-approved]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      ANDROID_USER_HOME: ${{ runner.temp }}/isolated-android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install SDK packages under existing runner licenses
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" </dev/null'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+          cache-disabled: true
+      - name: Run offline safety and lifecycle regressions
+        working-directory: ai-voice-keyboard
+        run: |
+          sh tests/run-tests.sh
+          python3 -m unittest discover -s tests -p 'test_*.py'
+          python3 -m unittest discover -s tools -p 'test_*.py'
+      - name: Build separate non-debuggable test APK
+        run: |
+          test -z "${AE_SIGNING_FILE:-}"
+          gradle -p ai-voice-keyboard :app:assembleIsolatedTest :app:lintIsolatedTest --no-daemon
+      - name: Remove one-off development signing material
+        if: always()
+        run: |
+          rm -f "$ANDROID_USER_HOME/debug.keystore" "$HOME/.android/debug.keystore"
+      - name: Verify separate package, certificate, version and APK digest
+        id: isolated
+        working-directory: ai-voice-keyboard
+        run: python3 scripts/verify_isolated_test.py
+      - name: Publish separate test prerelease without replacing old assets
+        working-directory: ai-voice-keyboard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.isolated.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" isolated-test/AI-Voice-Keyboard-Isolated-Test.apk isolated-test/AI-Voice-Keyboard-Isolated-Test.apk.sha256 isolated-test/metadata.txt \
+            --target "$GITHUB_SHA" --title "AI Voice Keyboard - Isolated Test" \
+            --notes-file ISOLATED_TEST.md --prerelease

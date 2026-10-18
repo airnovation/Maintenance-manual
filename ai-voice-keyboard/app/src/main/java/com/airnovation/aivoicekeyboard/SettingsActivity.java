@@ -33,7 +33,8 @@ public class SettingsActivity extends Activity {
         layout.setPadding(24, 28, 24, 16);
 
         TextView title = new TextView(this);
-        title.setText("AI Voice Keyboard – prototype");
+        title.setText(getPackageName().endsWith(".assistanttest")
+                ? "AI Voice Keyboard - Isolated Test" : "AI Voice Keyboard – prototype");
         title.setTextSize(22);
         layout.addView(title);
 
