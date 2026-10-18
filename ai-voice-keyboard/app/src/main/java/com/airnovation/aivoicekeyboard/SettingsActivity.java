@@ -39,7 +39,7 @@ public class SettingsActivity extends Activity {
         layout.addView(title);
 
         TextView details = new TextView(this);
-        details.setText("\n1. Allow microphone access.\n2. Enable the keyboard in Android Settings.\n3. Select AI Voice Keyboard as your input method.\n4. Open WhatsApp, Gmail or any text box.\n\nMic starts and Stop ends a recording. Audio is sent to your selected API provider for transcription and then English translation; a successful translation is inserted into the focused chat draft automatically. For typed text: type naturally using your usual Samsung/Gboard keyboard, switch to AI Voice Keyboard, then tap EN to translate the existing chat draft into concise, natural English. No need to use a separate Pinyin layout. EN never sends messages. Undo restores the immediately prior chat draft if you have not edited it since translation. The Keyboard button first tries to switch straight back to your previous phone keyboard, otherwise it opens the Android keyboard picker. Review before tapping Send yourself. Temporary recordings are deleted after processing.\n");
+        details.setText("\n1. Allow microphone access.\n2. Enable the keyboard in Android Settings.\n3. Select AI Voice Keyboard as your input method.\n4. Open WhatsApp, Gmail or any text box.\n\n语音整理（Gemini）：选择Gemini并保存自己的API key。键盘内点“开始说话”，再点“结束并整理”；核对转写和草稿后点“确认填入”，最后由你发送。默认自然英文，可说“用中文”“客气一点”“简短一点”。修改草稿请点“修改上一稿”。不读取聊天，不需要无障碍权限；录音及转写会交给Gemini处理。\n\nLegacy shortcuts (旧版): Mic starts and Stop ends a recording. Audio is sent to your selected API provider for transcription and then English translation; a successful translation is inserted into the focused chat draft automatically. For typed text: type naturally using your usual Samsung/Gboard keyboard, switch to AI Voice Keyboard, then tap EN to translate the existing chat draft into concise, natural English. No need to use a separate Pinyin layout. EN never sends messages. Undo restores the immediately prior chat draft if you have not edited it since translation. The Keyboard button first tries to switch straight back to your previous phone keyboard, otherwise it opens the Android keyboard picker. Review before tapping Send yourself. Temporary recordings are deleted after processing.\n");
         layout.addView(details);
 
         Button permission = new Button(this);
@@ -107,7 +107,7 @@ public class SettingsActivity extends Activity {
         layout.addView(keyInfo);
 
         TextView keyStatus = new TextView(this);
-        keyStatus.setText("Save a Gemini or OpenAI API key to use the Mic feature.");
+        keyStatus.setText("新语音整理需要Gemini。旧版Mic可使用所选Gemini或OpenAI。");
         keyStatus.setTextSize(14);
         layout.addView(keyStatus);
 

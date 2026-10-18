@@ -3,7 +3,5 @@
     <application android:label="AI Voice Keyboard - Isolated Test" tools:replace="android:label">
         <service android:name="com.airnovation.aivoicekeyboard.VoiceKeyboardService"
             android:label="AI Voice Keyboard - Isolated Test" tools:replace="android:label" />
-        <service android:name="com.airnovation.aivoicekeyboard.VisibleMessageService"
-            android:label="Input Assistant - Isolated Test" tools:replace="android:label" />
     </application>
 </manifest>

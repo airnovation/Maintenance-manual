@@ -69,26 +69,23 @@ assert capture.index('if (!AssistantSession.isWhatsApp(sourcePackage))') < read_
 assert read_source_guard.end() < capture.index('collect(root, sourcePackage,')
 assert read_source_guard.end() < capture.index('.getText(')
 
-# Both applications are allowlisted, but a draft may only be inserted back into
-# the package captured by this token. Revalidate the current editor and connection
-# after Accessibility checks; accepting either package alone is insufficient.
+# Voice-only IME no longer instantiates the chat reader or uses its context.
 keyboard = (src/'VoiceKeyboardService.java').read_text()
-assistant_insert = keyboard.split('private String insertAssistantDraft(')[1].split('private void clearUndo(')[0]
-first_source_guard = re.search(
-    r'if\s*\(!assistant\.matchesSource\(token, editor\.packageName\)\)\s*return "[^"]+";',
-    assistant_insert)
-assert first_source_guard, 'Manual insertion must match the captured source package'
-assert assistant_insert.index('if (!VisibleMessageService.stillCurrent(token))') < first_source_guard.start()
-assert first_source_guard.end() < assistant_insert.index('InputConnection connection = getCurrentInputConnection();')
-assert assistant_insert.index('InputConnection connection = getCurrentInputConnection();') < assistant_insert.index('EditorInfo currentEditor = getCurrentInputEditorInfo();')
-fresh_guard = re.search(
-    r'if\s*\(connection != getCurrentInputConnection\(\)\s*\|\| token != assistant\.token\(\)'
-    r'\s*\|\| currentEditor == null\s*\|\| isSensitive\(currentEditor\)'
-    r'\s*\|\| !assistant\.matchesSource\(token, currentEditor\.packageName\)\)\s*return "[^"]+";',
-    assistant_insert)
-assert fresh_guard, 'Final insertion guard must recheck connection, token, editor, password and source package'
-assert assistant_insert.index('EditorInfo currentEditor = getCurrentInputEditorInfo();') < fresh_guard.start()
-assert fresh_guard.end() < assistant_insert.index('connection.commitText(english, 1)')
+assert 'new VoiceDraftPanel(' in keyboard
+assert 'onEvaluateFullscreenMode() { return false; }' in keyboard
+assert 'new AssistantPanel(' not in keyboard and 'VisibleMessageService' not in keyboard
+assert 'AssistantSession' not in keyboard
+voice_insert = keyboard.split('private String insertVoiceDraft(')[1].split('private void clearUndo(')[0]
+assert '!voiceEditorCurrent()' in voice_insert
+assert 'connection != getCurrentInputConnection()' in voice_insert
+assert voice_insert.index('connection != getCurrentInputConnection()') < voice_insert.index('connection.commitText(draft, 1)')
+assert 'readChatDraft' not in voice_insert and 'performEditorAction' not in voice_insert
+voice_guard = keyboard.split('private boolean voiceEditorCurrent()')[1].split('private String insertVoiceDraft(')[0]
+for guard in ('isSensitive(info)', 'isInputViewShown()', '!keyguard.isKeyguardLocked()', 'voiceEditorBinding.matches('):
+    assert guard in voice_guard
+for manifest in (root/'AndroidManifest.xml', Path('app/src/isolatedTest/AndroidManifest.xml')):
+    manifest_text=manifest.read_text()
+    assert 'VisibleMessageService' not in manifest_text and 'BIND_ACCESSIBILITY_SERVICE' not in manifest_text
 # Local/screen size checks are eligibility gates before text access, never a substitute
 # for ancestor containment or same-window/external-window occlusion checks.
 collect = service.split('private void collect')[1].split('private static final class NodeText')[0]

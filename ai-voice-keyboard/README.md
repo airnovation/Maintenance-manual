@@ -1,3 +1,7 @@
+## Current v0.18 voice-only isolated test
+
+The current isolated test now focuses on voice intent drafting and explicit insertion, without chat reading or accessibility permissions. See [VOICE_ONLY.md](VOICE_ONLY.md). The release notes below describe earlier published versions.
+
 ## Current v0.17 isolated test
 
 Explicit local preview and selected-message approval are described in [LOCAL_REVIEW.md](LOCAL_REVIEW.md). Start → accept local-preview warning → inspect/uncheck messages → confirm upload to your configured Gemini service. Preview needs no key. Same-window covered text may be included; real-device usability remains unverified. See [ISOLATED_TEST.md](ISOLATED_TEST.md) for replacement-only test installation and temporary certificate limits.

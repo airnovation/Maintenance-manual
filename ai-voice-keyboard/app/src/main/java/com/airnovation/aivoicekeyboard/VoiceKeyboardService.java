@@ -27,7 +27,8 @@ import android.widget.TextView;
 
 /** Voice-first input method. No automatic messaging or background conversation reading. */
 public class VoiceKeyboardService extends InputMethodService {
-    private AssistantPanel assistantPanel;
+    private VoiceDraftPanel assistantPanel;
+    private final VoiceEditorBinding voiceEditorBinding = new VoiceEditorBinding();
     private TextView status;
     private EditText preview;
     private Button mic;
@@ -54,6 +55,9 @@ public class VoiceKeyboardService extends InputMethodService {
         }
     };
 
+    // Never create Android's landscape extracted-text editor for this voice-first UI.
+    @Override public boolean onEvaluateFullscreenMode() { return false; }
+
     @Override public View onCreateInputView() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -69,16 +73,24 @@ public class VoiceKeyboardService extends InputMethodService {
         });
         root.setBackgroundColor(0xfff1f2f4);
 
+        if (assistantPanel != null) assistantPanel.destroy();
+        assistantPanel = new VoiceDraftPanel(this, () -> recording || processingAudio || translating,
+                this::beginVoiceEditor, this::voiceEditorCurrent, this::insertVoiceDraft);
+        assistantPanel.addTo(root);
+        bindVoiceEditor(getCurrentInputEditorInfo());
+
         status = new TextView(this);
         status.setTextSize(15);
         status.setTextColor(0xff202020);
         status.setText("Mic / Stop: voice. EN: translate text from your regular keyboard.");
         root.addView(status);
+        status.setVisibility(View.GONE);
 
         // Keep every action above the preview, away from the phone's bottom navigation bar.
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(row);
+        row.setVisibility(View.GONE);
 
         mic = makeButton(row, "Mic", () -> toggleRecording());
         improve = makeButton(row, "EN", () -> translate());
@@ -90,8 +102,14 @@ public class VoiceKeyboardService extends InputMethodService {
         LinearLayout other = new LinearLayout(this);
         other.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(other);
+        makeButton(other, "旧版", () -> {
+            boolean expand = row.getVisibility() != View.VISIBLE;
+            row.setVisibility(expand ? View.VISIBLE : View.GONE);
+            status.setVisibility(expand ? View.VISIBLE : View.GONE);
+        });
         makeButton(other, "⌫ Delete", () -> deleteFromChatInput());
         makeButton(other, "↩ Keyboard", () -> {
+            if (assistantPanel != null) assistantPanel.stop();
             // Android 9+ can return directly to the most recently used keyboard.
             boolean switched = Build.VERSION.SDK_INT >= 28 && switchToPreviousInputMethod();
             if (!switched) {
@@ -112,12 +130,6 @@ public class VoiceKeyboardService extends InputMethodService {
         root.addView(preview, new LinearLayout.LayoutParams(-1, -2));
         preview.setVisibility(View.GONE);
 
-        if (assistantPanel != null) assistantPanel.destroy();
-        assistantPanel = new AssistantPanel(this, () -> recording || processingAudio || translating, this::insertAssistantDraft);
-        assistantPanel.addTo(root);
-        EditorInfo editor = getCurrentInputEditorInfo();
-        assistantPanel.editorChanged(editor != null && !isSensitive(editor)
-                && AssistantSession.isWhatsApp(editor.packageName));
         applySensitiveState();
         return root;
     }
@@ -142,8 +154,7 @@ public class VoiceKeyboardService extends InputMethodService {
         translating = false;
         clearUndo();
         sensitiveField = isSensitive(attribute);
-        if (assistantPanel != null) assistantPanel.editorChanged(attribute != null && !sensitiveField
-                && AssistantSession.isWhatsApp(attribute.packageName));
+        bindVoiceEditor(attribute);
         if (preview != null) preview.setText("");
         if (insert != null) insert.setVisibility(View.GONE);
         if (preview != null) preview.setVisibility(View.GONE);
@@ -153,8 +164,7 @@ public class VoiceKeyboardService extends InputMethodService {
     @Override public void onStartInputView(EditorInfo info, boolean restarting) {
         super.onStartInputView(info, restarting);
         sensitiveField = isSensitive(info);
-        if (assistantPanel != null) assistantPanel.editorChanged(info != null && !sensitiveField
-                && AssistantSession.isWhatsApp(info.packageName));
+        bindVoiceEditor(info);
         applySensitiveState();
     }
 
@@ -178,7 +188,7 @@ public class VoiceKeyboardService extends InputMethodService {
         if (preview != null) preview.setEnabled(!sensitiveField);
         if (status != null) status.setText(sensitiveField
                 ? "Sensitive field: voice & AI disabled. Switch to a trusted keyboard."
-                : "Mic / Stop: translate speech automatically. EN: translate typed chat text.");
+                : "旧版快捷键：Mic自动翻译填入 · EN整理已输入文字 · Undo撤销");
     }
 
     /**
@@ -422,6 +432,7 @@ public class VoiceKeyboardService extends InputMethodService {
     }
 
     private void insertText() {
+        if (assistantPanel != null) assistantPanel.stop();
         if (sensitiveField || preview == null || translating || processingAudio || recording) return;
         String value = preview.getText().toString().trim();
         if (value.isEmpty()) return;
@@ -443,31 +454,53 @@ public class VoiceKeyboardService extends InputMethodService {
         }
     }
 
-    /** Manual two-step assistant confirmation only. Never performs the host Send action. */
-    private String insertAssistantDraft(long token, String english) {
-        AssistantSession assistant = AssistantSession.INSTANCE;
-        EditorInfo editor = getCurrentInputEditorInfo();
-        if (recording || processingAudio || translating || sensitiveField || editor == null
-                || isSensitive(editor) || !AssistantSession.isWhatsApp(editor.packageName)
-                || !isInputViewShown() || !assistant.mayManuallyInsert(token, true))
-            return "当前输入会话不可用，请重新核对后重试。";
-        if (!VisibleMessageService.stillCurrent(token)) return "当前聊天页面已变化，请重新启动助手。";
-        if (!assistant.matchesSource(token, editor.packageName)) return "输入应用与消息来源不同，未插入。";
+    /** Voice-only editor binding: no accessibility or chat-content inspection. */
+    private void bindVoiceEditor(EditorInfo info) {
+        boolean allowed = info != null && !isSensitive(info)
+                && (info.inputType & InputType.TYPE_MASK_CLASS) == InputType.TYPE_CLASS_TEXT;
+        voiceEditorBinding.bind(generation, info == null ? null : info.packageName,
+                info == null ? 0 : info.fieldId, info == null ? 0 : info.inputType,
+                getCurrentInputConnection(), allowed);
+        if (assistantPanel != null) assistantPanel.editorChanged(allowed);
+    }
+    private boolean beginVoiceEditor() {
+        EditorInfo info = getCurrentInputEditorInfo();
+        if (info == null || isSensitive(info)
+                || (info.inputType & InputType.TYPE_MASK_CLASS) != InputType.TYPE_CLASS_TEXT) return false;
+        voiceEditorBinding.bind(generation, info.packageName, info.fieldId, info.inputType,
+                getCurrentInputConnection(), true);
+        if (!voiceEditorCurrent()) return false;
+        // Starting a new spoken draft leaves only one local preview route visible.
+        if (preview != null) { preview.setText(""); preview.setVisibility(View.GONE); }
+        if (insert != null) insert.setVisibility(View.GONE);
+        return true;
+    }
+    private boolean voiceEditorCurrent() {
+        EditorInfo info = getCurrentInputEditorInfo();
+        android.app.KeyguardManager keyguard = (android.app.KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+        return info != null && !isSensitive(info) && isInputViewShown()
+                && keyguard != null && !keyguard.isKeyguardLocked()
+                && voiceEditorBinding.matches(generation, info.packageName, info.fieldId,
+                        info.inputType, getCurrentInputConnection());
+    }
+    /** Explicit preview approval only. Commit at the cursor; never press Send. */
+    private String insertVoiceDraft(String draft) {
+        if (recording || processingAudio || translating || !voiceEditorCurrent()
+                || draft == null || draft.trim().isEmpty() || draft.length() > 4000)
+            return "当前输入框已变化或草稿不可用，请重新说话。";
         InputConnection connection = getCurrentInputConnection();
-        if (connection == null) return "没有当前输入框，未插入。";
-        // Re-read the current connection after the last foreground/context check.
-        EditorInfo currentEditor = getCurrentInputEditorInfo();
-        if (connection != getCurrentInputConnection() || token != assistant.token()
-                || currentEditor == null || isSensitive(currentEditor)
-                || !assistant.matchesSource(token, currentEditor.packageName))
-            return "输入焦点已变化，未插入。";
-        String before = readChatDraft();
+        if (connection == null || !voiceEditorCurrent() || connection != getCurrentInputConnection())
+            return "输入焦点已变化，未填入。";
         try {
-            if (!connection.commitText(english, 1)) return "当前输入框拒绝插入；英文仍在预览。";
-            saveUndo(before, readChatDraft());
+            if (!connection.commitText(draft, 1)) return "输入框拒绝填入，草稿仍在预览。";
+            clearUndo(); // No host text read: legacy Undo must not target an earlier edit.
             generation++;
             return null;
-        } catch (RuntimeException ignored) { return "输入连接已失效；请检查当前草稿，避免重复插入。"; }
+        } catch (RuntimeException ignored) {
+            generation++; // Commit outcome may be uncertain: prevent repeating this draft action.
+            clearUndo();
+            return "输入连接已失效；请查看当前输入框，避免重复填入。";
+        }
     }
 
     private void clearUndo() {
@@ -485,6 +518,7 @@ public class VoiceKeyboardService extends InputMethodService {
     }
 
     private void undoLastTranslation() {
+        if (assistantPanel != null) assistantPanel.stop();
         if (sensitiveField || recording || translating || processingAudio || undoAfter == null) return;
         String current = readChatDraft();
         if (!undoAfter.equals(current)) {
@@ -520,6 +554,7 @@ public class VoiceKeyboardService extends InputMethodService {
      * One press removes selected text or the code point just before the cursor.
      */
     private void deleteFromChatInput() {
+        if (assistantPanel != null) assistantPanel.stop();
         InputConnection connection = getCurrentInputConnection();
         if (connection == null) {
             if (status != null) status.setText("Tap the WhatsApp message box first.");

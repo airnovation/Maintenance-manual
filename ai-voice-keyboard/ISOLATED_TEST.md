@@ -1,3 +1,17 @@
+## v0.18: voice-only intelligent input
+
+This version does not read chat messages and does not need Accessibility permission. Enable the test keyboard and microphone, choose Gemini in Settings and enter your own Gemini key on your device.
+
+In an ordinary text input, tap **开始说话**, say the message and any language/tone/length request, then tap **结束并整理**. Review the recognized words and proposed draft, then tap **确认填入**. Send manually. Default output is natural English; you can say “用中文” or “简短一点”. **修改上一稿** revises an uninserted local draft. Missing essential details should ask for clarification rather than invent names, dates or commitments. Actual model/audio quality still needs phone testing.
+
+The old **Mic / EN / Undo** controls remain under **旧版**. Old Mic retains its previous automatic insertion behavior; the new voice flow always requires confirmation. No background recording, automatic Send or Live API is added.
+
+A fresh one-off development certificate is used. Replace ONLY **AI Voice Keyboard - Isolated Test**; it cannot install over the previous differently signed test build. Keep the original keyboard installed. Re-enter the Gemini key yourself; no key is bundled. No app is removed automatically. Temporary signing material is removed in CI, and production signing gates remain unchanged. See VOICE_ONLY.md for limitations.
+
+---
+
+Historical release notes follow; chat-reading/diagnostic instructions below do not apply to v0.18.
+
 ## v0.17: local preview before selected-content upload
 
 In a WhatsApp / WhatsApp Business message input, tap **启动助手**, read the warning, then **同意预览**. No Gemini key is needed to preview. Android-provided current-region message text may include parts covered by same-window overlays; it is not a pixel-visibility guarantee. The preview contains at most 12 messages / 3,000 characters, and long messages may be shortened in the visible preview.
