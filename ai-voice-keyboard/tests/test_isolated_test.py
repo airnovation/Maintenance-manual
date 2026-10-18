@@ -1,3 +1,4 @@
+import re
 import unittest
 from unittest.mock import patch
 import subprocess
@@ -6,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import verify_isolated_test as verify
 
-BADGING = "package: name='com.airnovation.aivoicekeyboard.assistanttest' versionCode='16' versionName='0.16-gate-diagnostics-isolated-test'\napplication-label:'AI Voice Keyboard - Isolated Test'\n"
+BADGING = "package: name='com.airnovation.aivoicekeyboard.assistanttest' versionCode='17' versionName='0.17-local-preview-isolated-test'\napplication-label:'AI Voice Keyboard - Isolated Test'\n"
 SIGNER = 'Verifies\nNumber of signers: 1\nSigner #1 certificate SHA-256 digest: ' + 'ab' * 32 + '\n'
 COMMIT = '1234567890abcdef1234567890abcdef12345678'
 
@@ -17,11 +18,16 @@ class VerificationTests(unittest.TestCase):
     def test_valid(self):
         self.assertEqual(self.validate()['tag'], 'isolated-assistant-test-1234567890ab-1234')
 
+    def test_gradle_version_matches_verifier(self):
+        gradle = (Path(__file__).resolve().parents[1] / 'app/build.gradle').read_text()
+        self.assertEqual(re.search(r'versionCode\s+(\d+)', gradle).group(1), verify.VERSION_CODE)
+        self.assertEqual(re.search(r"versionName\s+'([^']+)'", gradle).group(1) + '-isolated-test', verify.VERSION_NAME)
+
     def test_production_package_rejected(self):
         with self.assertRaises(ValueError): self.validate(BADGING.replace('.assistanttest', ''))
 
     def test_wrong_version_code(self):
-        with self.assertRaises(ValueError): self.validate(BADGING.replace("versionCode='16'", "versionCode='11'"))
+        with self.assertRaises(ValueError): self.validate(BADGING.replace("versionCode='17'", "versionCode='11'"))
 
     def test_wrong_version_name(self):
         with self.assertRaises(ValueError): self.validate(BADGING.replace('-isolated-test', ''))
