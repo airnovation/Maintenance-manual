@@ -5,7 +5,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.res.ColorStateList;
+import android.content.res.Configuration;
 import android.inputmethodservice.InputMethodService;
 import android.os.Build;
 import android.text.InputType;
@@ -25,14 +25,16 @@ import java.io.File;
 /** Compact voice-to-input. No background host text reading or automatic sending. */
 public class VoiceKeyboardService extends InputMethodService {
     private enum Phase { IDLE, RECORDING, PROCESSING, TRANSLATING, INSERTING }
-    private static final String IDLE_TEXT = "Mic：说内容、语气；Stop整理并填入。\n默认英文，可说“用中文”；发送由你操作。";
+    private static final String IDLE_TEXT = "默认英文，可说“用中文”；填入后手动发送。";
     private static final int MAX_TYPED_CHARS = 8000;
     private final VoiceDraftSession session = new VoiceDraftSession();
     private final VoiceEditorBinding editorBinding = new VoiceEditorBinding();
     private VoiceDraftTransport transport;
     private AssistantRecorder recorder;
     private TextView status;
-    private Button mic, improve, delete;
+    private Button mic, improve, delete, keyboard;
+    private LinearLayout keyboardRoot;
+    private KeyboardAppearance.Palette palette;
     private Phase phase = Phase.IDLE;
     private long generation, voiceToken = -1;
     private boolean registered, destroyed;
@@ -62,10 +64,12 @@ public class VoiceKeyboardService extends InputMethodService {
             registered = true;
         }
         LinearLayout root = new LinearLayout(this);
+        keyboardRoot = root;
+        palette = KeyboardAppearance.forConfiguration(getResources().getConfiguration());
         root.setOrientation(LinearLayout.VERTICAL);
         int pad = Math.round(getResources().getDisplayMetrics().density * 12);
         root.setPadding(pad, pad, pad, pad * 2);
-        root.setBackgroundColor(0xfff1f2f4);
+        root.setBackgroundColor(palette.surface);
         root.setSaveEnabled(false);
         root.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
         root.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -78,7 +82,7 @@ public class VoiceKeyboardService extends InputMethodService {
 
         status = new TextView(this);
         status.setTextSize(15);
-        status.setTextColor(0xff202020);
+        status.setTextColor(palette.statusText);
         status.setMaxLines(2);
         status.setEllipsize(TextUtils.TruncateAt.END);
         status.setSaveEnabled(false);
@@ -88,13 +92,14 @@ public class VoiceKeyboardService extends InputMethodService {
         row.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(row);
         mic = makeButton(row, "Mic", this::toggleRecording);
-        improve = makeButton(row, "EN", this::translate);
+        improve = makeButton(row, "EN 英文", this::translate);
+        improve.setContentDescription("EN 英文：将选中文字或输入框草稿整理成英文");
 
         LinearLayout other = new LinearLayout(this);
         other.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(other);
         delete = makeButton(other, "⌫ Delete", this::deleteFromChatInput);
-        makeButton(other, "↩ Keyboard", () -> {
+        keyboard = makeButton(other, "↩ Keyboard", () -> {
             reset(IDLE_TEXT); // Cancel before switching, even if Android cannot switch immediately.
             boolean switched = Build.VERSION.SDK_INT >= 28 && switchToPreviousInputMethod();
             if (!switched) {
@@ -103,6 +108,7 @@ public class VoiceKeyboardService extends InputMethodService {
             }
         });
 
+        applyAppearance(getResources().getConfiguration());
         showStatus(editorAllowed(getCurrentInputEditorInfo()) ? IDLE_TEXT : unavailableEditor());
         updateButtons();
         return root;
@@ -112,11 +118,29 @@ public class VoiceKeyboardService extends InputMethodService {
         Button button = new Button(this);
         button.setText(title);
         button.setAllCaps(false);
-        button.setTextColor(0xff111111);
-        button.setBackgroundTintList(ColorStateList.valueOf(0xffd7e2ef));
         row.addView(button, new LinearLayout.LayoutParams(0, -2, 1f));
         button.setOnClickListener(view -> click.run());
         return button;
+    }
+
+    /** Paint only: never creates a session, changes enabled states or touches the editor. */
+    private void applyAppearance(Configuration configuration) {
+        palette = KeyboardAppearance.forConfiguration(configuration);
+        if (keyboardRoot != null) keyboardRoot.setBackgroundColor(palette.surface);
+        if (status != null) status.setTextColor(palette.statusText);
+        float density = getResources().getDisplayMetrics().density;
+        KeyboardAppearance.style(mic, palette, phase == Phase.RECORDING
+                ? KeyboardAppearance.Role.STOP : KeyboardAppearance.Role.MIC, density);
+        KeyboardAppearance.style(improve, palette, KeyboardAppearance.Role.NEUTRAL, density);
+        KeyboardAppearance.style(delete, palette, KeyboardAppearance.Role.NEUTRAL, density);
+        KeyboardAppearance.style(keyboard, palette, KeyboardAppearance.Role.NEUTRAL, density);
+    }
+
+    @Override public void onConfigurationChanged(Configuration configuration) {
+        // Keep Android's normal IME restart/cancellation callbacks. A theme redraw itself
+        // must never reset or revive an operation that those callbacks already invalidated.
+        super.onConfigurationChanged(configuration);
+        applyAppearance(configuration);
     }
 
     private static boolean editorAllowed(EditorInfo info) {
@@ -177,6 +201,12 @@ public class VoiceKeyboardService extends InputMethodService {
         boolean available = editorAvailable();
         if (mic != null) {
             mic.setText(phase == Phase.RECORDING ? "Stop" : "Mic");
+            mic.setContentDescription(phase == Phase.RECORDING
+                    ? "Stop：结束录音，交给Gemini整理并填入；请核对后手动发送"
+                    : "Mic：开始录音，说内容和语气；Stop整理并填入");
+            if (palette != null) KeyboardAppearance.style(mic, palette,
+                    phase == Phase.RECORDING ? KeyboardAppearance.Role.STOP : KeyboardAppearance.Role.MIC,
+                    getResources().getDisplayMetrics().density);
             mic.setEnabled(available && (phase == Phase.RECORDING || !busy()));
         }
         if (improve != null) improve.setEnabled(available && !busy());
@@ -201,7 +231,7 @@ public class VoiceKeyboardService extends InputMethodService {
         phase = Phase.RECORDING;
         error = recorder.start();
         if (error != null) { reset(error); return; }
-        showStatus("Stop：交给Gemini整理；Keyboard取消。\n最长60秒，不会自动上传。");
+        showStatus("Stop交给Gemini整理并填入。\nKeyboard取消；最长60秒不自动上传。");
         updateButtons();
     }
 
@@ -454,7 +484,10 @@ public class VoiceKeyboardService extends InputMethodService {
             else if (Character.isISOControl(codePoint) || Character.getType(codePoint) == Character.FORMAT) safe.append(' ');
             else safe.appendCodePoint(codePoint);
         }
-        status.setText(safe.toString());
+        String full = safe.toString();
+        status.setText(KeyboardAppearance.statusCopy(full));
+        status.setContentDescription(full); // Full safe wording stays available to screen readers.
+        status.scrollTo(0, 0);
     }
 
     private static void deleteFile(File file) { if (file != null) file.delete(); }

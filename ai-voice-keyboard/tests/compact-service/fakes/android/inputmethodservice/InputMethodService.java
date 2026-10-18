@@ -4,6 +4,13 @@ import android.content.Context;
 import android.view.View;
 import android.view.inputmethod.*;
 public class InputMethodService extends Context {
+public boolean recreateOnConfiguration;
+public int configurationCalls;
+public View recreatedView;
+public void onConfigurationChanged(android.content.res.Configuration configuration) {
+ configurationCalls++; resources.configuration=configuration;
+ if(recreateOnConfiguration){onFinishInputView(false);recreatedView=onCreateInputView();onStartInput(info,true);onStartInputView(info,true);}
+}
 public EditorInfo info; public InputConnection connection; public boolean shown=true, switchResult=true;
 public int switches, keyEvents; public final KeyguardManager keyguard=new KeyguardManager();
 public final InputMethodManager manager=new InputMethodManager();

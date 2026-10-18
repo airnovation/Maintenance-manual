@@ -4,7 +4,7 @@ Run `sh tests/compact-service/run-tests.sh` from any directory. Java 17-compatib
 
 The production `VoiceKeyboardService`, `VoiceDraftSession`, `VoiceEditorBinding`, `ApiKeyValidation` and `SafeApiErrors` run against deterministic Android, recording, translation and voice transport fakes. Coverage includes:
 
-- Only Mic / EN and Delete / Keyboard. No preview, confirmation, revision or fallback-insert control; bounded two-line status; no extracted fullscreen editor.
+- Only Mic / EN 英文 and Delete / Keyboard. No preview, confirmation, revision or fallback-insert control; bounded two-line status; no extracted fullscreen editor.
 - Mic records locally. Explicit Stop uploads and successful intent drafting inserts exactly once into the originally bound editor. No automatic Send action.
 - Voice never reads extracted/selected host text. Initial selection metadata must identify a collapsed cursor. Selected or unknown cursor positions cannot start capture.
 - Any selection, cursor, composition or same-offset update while recording or waiting for the provider cancels the operation. Lifecycle, identity, lock, dismissal and connection checks also invalidate old results.
@@ -21,3 +21,16 @@ Voice observes Android editor metadata and selection/lifecycle callbacks, not ho
 ## Remaining device checks
 
 This is behavioral boundary coverage, not actual Android rendering or a live provider test. Keyboard size, navigation insets, real callback ordering, composition handoff from Samsung/Gboard, microphone behavior, provider output quality and app-specific editor compatibility still need phone testing. No signing or publication occurs in this suite.
+
+## Cosmetic theme regression
+
+`KeyboardAppearanceTest` additionally runs the production appearance helper and service using explicit drawable/configuration state fakes. It verifies:
+
+- System night-mode masking, soft gray / charcoal surfaces, blue Mic and warm red Stop; stateful monochrome Mic/Stop icons and neutral utility keys.
+- Normal, pressed, focused, disabled and disabled+pressed state selection. WCAG relative-luminance calculations assert at least 4.5:1 text/icon-to-fill contrast in both themes, including disabled controls. The current minimum is 4.60:1.
+- Four controls, unchanged equal-weight wrap-content bounds, existing theme padding and 48dp minimum touch sizing, symmetric internal shape insets/corners, and the existing navigation-inset formula. No additional row, external margin or fixed height is introduced.
+- Theme paint alone preserves tokens, phases, selection guards, enabled states, status and callbacks across idle, recording, processing and EN translation. It performs no editor read, upload, insertion or cancellation.
+- A separate simulated Android superclass lifecycle restart cancels existing work and rejects stale callbacks. Actual Android may recreate the IME on configuration changes; these tests do not claim recordings always survive a theme change.
+- Fixed display-only error shortening retains HTTP codes and recovery guidance; original sanitized full status remains available to accessibility. Status stays 15sp, can wrap to two lines, and is not auto-shrunk. Idle has no forced line break.
+
+These are host state/geometry-contract assertions, not a measured Android layout or screenshot. Actual phone font scaling, narrow/landscape line wrapping, navigation modes, OEM theme geometry and framework callback ordering still need device validation. No API, prompt, setting, permission, version, signing or publication behavior is changed by the appearance helper.

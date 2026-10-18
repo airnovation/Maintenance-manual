@@ -16,7 +16,7 @@ public final class CompactServiceTest {
     static final List<Harness> harnesses = new ArrayList<>();
     public static void main(String[] args) throws Exception {
         run("four compact controls, no preview/confirmation or opening side effects",()->{
-            Harness h=new Harness();equal(List.of("Mic","EN","⌫ Delete","↩ Keyboard"),h.labels(),"exact four controls");
+            Harness h=new Harness();equal(List.of("Mic","EN 英文","⌫ Delete","↩ Keyboard"),h.labels(),"exact four controls");
             equal(3,h.root.children.size(),"only status and two rows");equal(2,((LinearLayout)h.root.children.get(1)).children.size(),"two primary controls");
             equal(12,h.root.padLeft,"original padding");equal(24,h.root.padBottom,"original bottom padding");equal(2,h.status.maxLines,"bounded status");
             check(!h.root.saveEnabled,"RAM-only UI");check(!h.service.onEvaluateFullscreenMode(),"no extracted fullscreen editor");
@@ -24,9 +24,9 @@ public final class CompactServiceTest {
         });
         run("explicit Mic Stop automatically inserts once without host reads or send",()->{
             Harness h=new Harness();h.start();equal(0,h.transport.requests.size(),"Mic alone no upload");
-            check(!h.button("EN").performClick()&&!h.button("⌫ Delete").performClick(),"recording excludes EN Delete");
+            check(!h.button("EN 英文").performClick()&&!h.button("⌫ Delete").performClick(),"recording excludes EN Delete");
             h.finish();equal(1,h.transport.requests.size(),"Stop uploads once");equal(null,h.transport.requests.get(0).previous(),"no previous draft/context");
-            check(!h.button("Mic").performClick()&&!h.button("EN").performClick(),"processing excludes repeat requests");
+            check(!h.button("Mic").performClick()&&!h.button("EN 英文").performClick(),"processing excludes repeat requests");
             h.complete("Synthetic speech","Synthetic message");equal(1,h.host.commits,"automatic insertion once");equal("Synthetic message",h.host.lastCommit,"intended draft committed");
             equal(1,h.host.finishComposingCalls,"composition finalized only immediately before commit");h.assertNoVoiceHostRead();h.assertClear();
             h.complete("Duplicate","DUPLICATE");equal(1,h.host.commits,"duplicate callback cannot repeat insertion");equal(0,h.service.keyEvents,"never sends host action");
@@ -88,7 +88,7 @@ public final class CompactServiceTest {
             SharedPreferences.provider="gemini";SecureSettings.key="bad\nSYNTHETIC_SECRET";h.start();equal(0,h.recorder.startCalls,"bad key blocks");check(!h.status.getText().toString().contains("SYNTHETIC_SECRET"),"key not echoed");h.assertNoVoiceHostRead();
         });
         for(int type:new int[]{0,2,18,129,145,225})run("disallowed editor type "+type+" disables voice EN",()->{
-            Harness h=new Harness();h.service.info.inputType=type;h.service.onStartInput(h.service.info,false);check(!h.button("Mic").performClick()&&!h.button("EN").performClick(),"controls disabled");equal(0,SecureSettings.reads,"key unread");h.assertNoVoiceHostRead();
+            Harness h=new Harness();h.service.info.inputType=type;h.service.onStartInput(h.service.info,false);check(!h.button("Mic").performClick()&&!h.button("EN 英文").performClick(),"controls disabled");equal(0,SecureSettings.reads,"key unread");h.assertNoVoiceHostRead();
         });
         run("missing field and lock prevent capture",()->{
             Harness h=new Harness();h.service.keyguard.locked=true;h.start();equal(0,h.recorder.startCalls,"lock blocks");h.service.keyguard.locked=false;h.service.onStartInput(null,false);check(!h.button("Mic").performClick(),"missing editor blocked");
@@ -131,44 +131,44 @@ public final class CompactServiceTest {
             Harness p=new Harness();p.host.onCommit=()->p.service.onStartInput(new EditorInfo(),false);p.start();p.finish();p.complete("Speech","DRAFT");p.assertClear();equal(1,p.host.commits,"lifecycle callback no retry");
         });
         run("EN preserves whole typed replacement and excludes Mic while busy",()->{
-            Harness h=new Harness();h.setHost("Synthetic typed content",23,23);h.click("EN");equal("Synthetic typed content",OpenAiEnglish.requests.get(0).source(),"explicit EN source");
-            check(!h.button("Mic").performClick()&&!h.button("EN").performClick()&&!h.button("⌫ Delete").performClick(),"EN mutual exclusion");OpenAiEnglish.complete(0,"English result",null);equal("English result",h.host.text,"unchanged text replaced");equal(1,h.host.commits,"one commit");h.assertClear();
+            Harness h=new Harness();h.setHost("Synthetic typed content",23,23);h.click("EN 英文");equal("Synthetic typed content",OpenAiEnglish.requests.get(0).source(),"explicit EN source");
+            check(!h.button("Mic").performClick()&&!h.button("EN 英文").performClick()&&!h.button("⌫ Delete").performClick(),"EN mutual exclusion");OpenAiEnglish.complete(0,"English result",null);equal("English result",h.host.text,"unchanged text replaced");equal(1,h.host.commits,"one commit");h.assertClear();
         });
         run("EN only translates selected substring when selection exists",()->{
-            Harness h=new Harness();h.setHost("before SOURCE after",7,13);h.click("EN");equal("SOURCE",OpenAiEnglish.requests.get(0).source(),"only selection transmitted");OpenAiEnglish.complete(0,"RESULT",null);equal("before RESULT after",h.host.text,"outside selection preserved");
+            Harness h=new Harness();h.setHost("before SOURCE after",7,13);h.click("EN 英文");equal("SOURCE",OpenAiEnglish.requests.get(0).source(),"only selection transmitted");OpenAiEnglish.complete(0,"RESULT",null);equal("before RESULT after",h.host.text,"outside selection preserved");
         });
         run("EN preserves nonselected composing text and intended replacement range",()->{
             Harness h=new Harness();h.setHost("before SOURCE after",7,13);h.host.compStart=0;h.host.compEnd=6;
-            h.click("EN");equal("SOURCE",OpenAiEnglish.requests.get(0).source(),"selected range remains authoritative");
+            h.click("EN 英文");equal("SOURCE",OpenAiEnglish.requests.get(0).source(),"selected range remains authoritative");
             h.host.compStart=14;h.host.compEnd=19;OpenAiEnglish.complete(0,"RESULT",null);
             equal("before RESULT after",h.host.text,"composing span outside selection never overwritten");equal(2,h.host.finishComposingCalls,"EN finalizes before snapshot and replacement");
         });
         run("EN composition failure and synchronous lifecycle changes cannot dispatch or commit",()->{
-            Harness h=new Harness();h.setHost("SOURCE",0,0);h.host.finishComposingResult=false;h.click("EN");equal(0,OpenAiEnglish.requests.size(),"initial finish failure no request");
-            Harness p=new Harness();p.setHost("SOURCE",0,0);p.host.onFinishComposing=()->p.service.onStartInput(new EditorInfo(),false);p.click("EN");equal(0,OpenAiEnglish.requests.size(),"initial lifecycle change no request");
-            Harness q=new Harness();q.setHost("SOURCE",0,0);q.click("EN");q.host.onFinishComposing=()->q.service.onStartInput(new EditorInfo(),false);OpenAiEnglish.complete(0,"STALE",null);equal(0,q.host.commits,"late finish lifecycle change no commit");
+            Harness h=new Harness();h.setHost("SOURCE",0,0);h.host.finishComposingResult=false;h.click("EN 英文");equal(0,OpenAiEnglish.requests.size(),"initial finish failure no request");
+            Harness p=new Harness();p.setHost("SOURCE",0,0);p.host.onFinishComposing=()->p.service.onStartInput(new EditorInfo(),false);p.click("EN 英文");equal(0,OpenAiEnglish.requests.size(),"initial lifecycle change no request");
+            Harness q=new Harness();q.setHost("SOURCE",0,0);q.click("EN 英文");q.host.onFinishComposing=()->q.service.onStartInput(new EditorInfo(),false);OpenAiEnglish.complete(0,"STALE",null);equal(0,q.host.commits,"late finish lifecycle change no commit");
         });
         run("changed text or cursor aborts EN without fallback UI",()->{
-            Harness h=new Harness();h.setHost("SOURCE",0,0);h.click("EN");h.host.text="EDITED";OpenAiEnglish.complete(0,"RESULT",null);equal(0,h.host.commits,"changed text not overwritten");h.assertClear();
-            Harness p=new Harness();p.setHost("SOURCE",0,0);p.click("EN");p.host.start=p.host.end=2;OpenAiEnglish.complete(1,"RESULT",null);equal(0,p.host.commits,"changed cursor not overwritten");p.assertClear();
+            Harness h=new Harness();h.setHost("SOURCE",0,0);h.click("EN 英文");h.host.text="EDITED";OpenAiEnglish.complete(0,"RESULT",null);equal(0,h.host.commits,"changed text not overwritten");h.assertClear();
+            Harness p=new Harness();p.setHost("SOURCE",0,0);p.click("EN 英文");p.host.start=p.host.end=2;OpenAiEnglish.complete(1,"RESULT",null);equal(0,p.host.commits,"changed cursor not overwritten");p.assertClear();
         });
         run("EN failure preserves original with short control-free status",()->{
-            Harness h=new Harness();h.setHost("SOURCE",0,0);h.click("EN");OpenAiEnglish.complete(0,null,"Fixed safe error\n\n\u202e"+"x".repeat(300));equal("SOURCE",h.host.text,"source retained");h.assertClear();
+            Harness h=new Harness();h.setHost("SOURCE",0,0);h.click("EN 英文");OpenAiEnglish.complete(0,null,"Fixed safe error\n\n\u202e"+"x".repeat(300));equal("SOURCE",h.host.text,"source retained");h.assertClear();
             String value=h.status.getText().toString();check(value.length()<=180,"status bounded");equal(1L,value.chars().filter(c->c=='\n').count(),"max two lines");check(!value.contains("\u202e"),"bidi controls removed");
         });
         run("partial oversized and null EN extractions cannot be sent",()->{
-            Harness h=new Harness();h.setHost("SOURCE",0,0);h.host.partialStart=1;h.click("EN");equal(0,OpenAiEnglish.requests.size(),"partial refused");h.host.partialStart=-1;h.host.text="x".repeat(8001);h.click("EN");equal(0,OpenAiEnglish.requests.size(),"oversized refused");h.host.nullExtraction=true;h.click("EN");equal(0,OpenAiEnglish.requests.size(),"null refused");
+            Harness h=new Harness();h.setHost("SOURCE",0,0);h.host.partialStart=1;h.click("EN 英文");equal(0,OpenAiEnglish.requests.size(),"partial refused");h.host.partialStart=-1;h.host.text="x".repeat(8001);h.click("EN 英文");equal(0,OpenAiEnglish.requests.size(),"oversized refused");h.host.nullExtraction=true;h.click("EN 英文");equal(0,OpenAiEnglish.requests.size(),"null refused");
         });
         run("synchronous lifecycle inside extraction blocks EN request and callback",()->{
-            Harness h=new Harness();h.setHost("SOURCE",0,0);h.host.onExtract=()->h.service.onStartInput(new EditorInfo(),false);h.click("EN");equal(0,OpenAiEnglish.requests.size(),"no stale dispatch");h.assertClear();
-            Harness p=new Harness();p.setHost("SOURCE",0,0);p.click("EN");p.host.onExtract=()->p.service.onStartInput(new EditorInfo(),false);OpenAiEnglish.complete(0,"STALE",null);equal(0,p.host.commits,"no stale callback commit");p.assertClear();
+            Harness h=new Harness();h.setHost("SOURCE",0,0);h.host.onExtract=()->h.service.onStartInput(new EditorInfo(),false);h.click("EN 英文");equal(0,OpenAiEnglish.requests.size(),"no stale dispatch");h.assertClear();
+            Harness p=new Harness();p.setHost("SOURCE",0,0);p.click("EN 英文");p.host.onExtract=()->p.service.onStartInput(new EditorInfo(),false);OpenAiEnglish.complete(0,"STALE",null);equal(0,p.host.commits,"no stale callback commit");p.assertClear();
         });
         run("connection swap during extraction or lifecycle during selection blocks EN",()->{
-            Harness h=new Harness();h.setHost("SOURCE",0,0);h.host.onExtract=()->h.service.connection=new Host();h.click("EN");equal(0,OpenAiEnglish.requests.size(),"connection swap no dispatch");
-            Harness p=new Harness();p.setHost("SOURCE",0,0);p.click("EN");p.host.onSelect=()->p.service.onStartInput(new EditorInfo(),false);OpenAiEnglish.complete(0,"STALE",null);equal(0,p.host.commits,"no commit after selection lifecycle change");p.assertClear();
+            Harness h=new Harness();h.setHost("SOURCE",0,0);h.host.onExtract=()->h.service.connection=new Host();h.click("EN 英文");equal(0,OpenAiEnglish.requests.size(),"connection swap no dispatch");
+            Harness p=new Harness();p.setHost("SOURCE",0,0);p.click("EN 英文");p.host.onSelect=()->p.service.onStartInput(new EditorInfo(),false);OpenAiEnglish.complete(0,"STALE",null);equal(0,p.host.commits,"no commit after selection lifecycle change");p.assertClear();
         });
         run("late EN after exit never affects editor",()->{
-            Harness h=new Harness();h.setHost("SOURCE",0,0);h.click("EN");h.service.onFinishInput();OpenAiEnglish.complete(0,"STALE",null);h.assertClear();equal(0,h.host.commits,"late EN ignored");
+            Harness h=new Harness();h.setHost("SOURCE",0,0);h.click("EN 英文");h.service.onFinishInput();OpenAiEnglish.complete(0,"STALE",null);h.assertClear();equal(0,h.host.commits,"late EN ignored");
         });
         run("Delete remains explicit without AI requests",()->{
             Harness h=new Harness();h.setHost("abcd",1,3);h.click("⌫ Delete");equal("ad",h.host.text,"selected text removed");equal(0,h.transport.requests.size(),"no voice request");equal(0,OpenAiEnglish.requests.size(),"no translation");

@@ -13,8 +13,8 @@ public class LinearLayout extends View {
     public void addView(View child) { children.add(child); child.parent = this; }
     public void addView(View child, LayoutParams params) { addView(child); this.params.put(child, params); }
     public static class LayoutParams {
-        public final int width, height;
+        public final int width, height; public float weight;
         public LayoutParams(int width, int height) { this.width = width; this.height = height; }
-        public LayoutParams(int width, int height, float weight) { this(width, height); }
+        public LayoutParams(int width, int height, float weight) { this(width, height); this.weight=weight; }
     }
 }
