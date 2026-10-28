@@ -17,4 +17,7 @@ assert 'key.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO)' in settings
 assert 'getMessage()' not in service
 assert 'onEvaluateFullscreenMode()' in service
 assert 'Undo restores' not in settings
+assert 'title.setText("AI Voice Keyboard");' in settings
+assert 'AI Voice Keyboard – prototype' not in settings
+assert 'debug test signatures may require uninstalling' not in settings
 print('Compact structural boundaries passed (manifest, no obsolete UI/Undo, key entry privacy, sanitized service errors).')

@@ -33,7 +33,7 @@ public class SettingsActivity extends Activity {
         layout.setPadding(24, 28, 24, 16);
 
         TextView title = new TextView(this);
-        title.setText("AI Voice Keyboard – prototype");
+        title.setText("AI Voice Keyboard");
         title.setTextSize(22);
         layout.addView(title);
 
@@ -66,12 +66,12 @@ public class SettingsActivity extends Activity {
         layout.addView(select);
 
         Button updates = new Button(this);
-        updates.setText("Open GitHub Test Builds");
+        updates.setText("Open GitHub Build History");
         updates.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW,
                 Uri.parse("https://github.com/airnovation/Maintenance-manual/actions"))));
         layout.addView(updates);
         TextView updateNote = new TextView(this);
-        updateNote.setText("Opens GitHub build history. This is not an automatic update checker. You still need to download a new APK and approve installation; debug test signatures may require uninstalling the old version.");
+        updateNote.setText("Opens GitHub build history, not automatic updates. Only install a verified APK yourself. Updates need a matching signing certificate. Keep your current keyboard and back up settings before any separately approved reinstall.");
         layout.addView(updateNote);
 
         TextView providerLabel = new TextView(this);
@@ -104,7 +104,7 @@ public class SettingsActivity extends Activity {
         layout.addView(key);
 
         TextView keyInfo = new TextView(this);
-        keyInfo.setText("\nAPI key is encrypted locally using Android Keystore. Never paste it in GitHub or WhatsApp. OpenAI and Gemini require different keys. OpenAI API billing is separate from ChatGPT subscriptions. An API key is required for voice transcription in this test version.\n");
+        keyInfo.setText("\nAPI key is encrypted locally using Android Keystore. Never paste it in GitHub or WhatsApp. OpenAI and Gemini require different keys. OpenAI API billing is separate from ChatGPT subscriptions. An API key is required for voice transcription.\n");
         layout.addView(keyInfo);
 
         TextView keyStatus = new TextView(this);
