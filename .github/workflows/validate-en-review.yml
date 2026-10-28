@@ -53,8 +53,16 @@ jobs:
               }
           }
           gradle.taskGraph.whenReady { graph ->
-              if (graph.allTasks.any { it.name.toLowerCase().contains('sign') }) {
-                  throw new GradleException('Signing tasks are forbidden in EN validation')
+              // AGP writes version metadata even for unsigned APKs; it does not sign.
+              def forbidden = graph.allTasks.findAll {
+                  it.name.toLowerCase().contains('sign') && it.name != 'writeIsolatedTestSigningConfigVersions'
+              }
+              if (!forbidden.empty) {
+                  throw new GradleException('Signing tasks are forbidden in EN validation: ' + forbidden*.path)
+              }
+              def app = gradle.rootProject.project(':app')
+              if (app.extensions.getByName('android').buildTypes.getByName('isolatedTest').signingConfig != null) {
+                  throw new GradleException('The validation build must have no signing configuration')
               }
           }
           GRADLE
