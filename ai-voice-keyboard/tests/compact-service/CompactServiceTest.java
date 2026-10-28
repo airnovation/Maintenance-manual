@@ -170,6 +170,61 @@ public final class CompactServiceTest {
         run("late EN after exit never affects editor",()->{
             Harness h=new Harness();h.setHost("SOURCE",0,0);h.click("EN 英文");h.service.onFinishInput();OpenAiEnglish.complete(0,"STALE",null);h.assertClear();equal(0,h.host.commits,"late EN ignored");
         });
+        for(String provider:List.of("gemini","openai")) {
+            for(String exit:List.of("keyboard","finishView","finishInput","hidden","lock","destroy","newEditor","recreate")) {
+                run(provider+" EN "+exit+" cancels its handle and rejects late callbacks",()->{
+                    Harness h=new Harness();SharedPreferences.provider=provider;h.setHost("SOURCE",0,0);h.click("EN 英文");
+                    EnglishRequest request=OpenAiEnglish.requests.get(0).handle();equal(request,field(h.service,"englishRequest"),"pending handle retained");
+                    h.exit(exit);check(request.cancelled,"request cancelled on exit");equal(1,request.cancelCalls,"detached handle cancelled once");
+                    equal(null,field(h.service,"englishRequest"),"cancelled handle released");
+                    OpenAiEnglish.complete(0,"STALE",null);OpenAiEnglish.complete(0,null,"Stale error");
+                    equal("SOURCE",h.host.text,"original retained");equal(0,h.host.commits,"late success/error no insertion");
+                    equal(0,h.service.keyEvents,"never sends");h.assertClear();
+                });
+            }
+            run(provider+" reset starts a new EN without retaining the abandoned request",()->{
+                Harness h=new Harness();SharedPreferences.provider=provider;h.setHost("SOURCE",0,0);h.click("EN 英文");
+                EnglishRequest old=OpenAiEnglish.requests.get(0).handle();
+                check(!h.button("EN 英文").performClick(),"repeat tap disabled");equal(1,OpenAiEnglish.requests.size(),"repeat tap no second request");
+                h.click("↩ Keyboard");h.setHost("NEW SOURCE",0,0);h.click("EN 英文");
+                EnglishRequest current=OpenAiEnglish.requests.get(1).handle();check(old.cancelled,"abandoned request cancelled");check(!current.cancelled,"new request active");
+                equal(current,field(h.service,"englishRequest"),"only new handle retained");
+                OpenAiEnglish.complete(0,"OLD",null);OpenAiEnglish.complete(0,null,"Old failure");
+                check(!current.cancelled,"old callback cannot cancel current");equal(0,h.host.commits,"old cannot insert");
+                OpenAiEnglish.complete(1,"NEW RESULT",null);OpenAiEnglish.complete(1,"DUPLICATE",null);
+                equal("NEW RESULT",h.host.text,"new result inserted");equal(1,h.host.commits,"new inserts exactly once");
+                equal(null,field(h.service,"englishRequest"),"completed handle released");equal(0,h.service.keyEvents,"manual send only");
+            });
+            run(provider+" synchronous result before rewrite returns cannot retain a finished handle",()->{
+                Harness h=new Harness();SharedPreferences.provider=provider;h.setHost("SOURCE",0,0);
+                OpenAiEnglish.duringRewrite=request->request.callback().done("RESULT",null);
+                h.click("EN 英文");EnglishRequest request=OpenAiEnglish.requests.get(0).handle();
+                equal("RESULT",h.host.text,"synchronous result inserted once");equal(1,h.host.commits,"one insertion");
+                check(request.cancelled,"already completed returned handle cancelled");equal(null,field(h.service,"englishRequest"),"finished request not retained");
+                OpenAiEnglish.duringRewrite=null;h.setHost("SECOND",0,0);h.click("EN 英文");
+                check(!OpenAiEnglish.requests.get(1).handle().cancelled,"next request independent");
+            });
+            run(provider+" lifecycle during dispatch cannot replace a newer request handle",()->{
+                Harness h=new Harness();SharedPreferences.provider=provider;h.setHost("SOURCE",0,0);
+                OpenAiEnglish.duringRewrite=request->{
+                    OpenAiEnglish.duringRewrite=null;
+                    h.setHost("NEW SOURCE",0,0);h.click("EN 英文");
+                };
+                h.click("EN 英文");EnglishRequest old=OpenAiEnglish.requests.get(0).handle(),current=OpenAiEnglish.requests.get(1).handle();
+                check(old.cancelled,"old dispatch cancelled after generation change");check(!current.cancelled,"new reentrant dispatch active");
+                equal(current,field(h.service,"englishRequest"),"old return cannot overwrite newer handle");
+                OpenAiEnglish.complete(0,"OLD",null);equal(0,h.host.commits,"old callback ignored");
+                OpenAiEnglish.complete(1,"NEW",null);equal("NEW",h.host.text,"new callback accepted");equal(1,h.host.commits,"exactly one insertion");
+            });
+        }
+        for(String change:List.of("text","cursor","selection","connection","field","package","type","hidden","locked")) {
+            run("EN changed "+change+" rejects result and releases request",()->{
+                Harness h=new Harness();h.setHost("SOURCE",0,0);h.click("EN 英文");EnglishRequest request=OpenAiEnglish.requests.get(0).handle();
+                switch(change){case "text"->h.host.text="EDITED";case "cursor"->h.host.start=h.host.end=2;case "selection"->{h.host.start=1;h.host.end=4;}default->h.change(change);}
+                OpenAiEnglish.complete(0,"STALE",null);check(request.cancelled,"invalidated result cancels handle");
+                equal(null,field(h.service,"englishRequest"),"invalid handle released");equal(0,h.host.commits,"changed target not overwritten");
+            });
+        }
         run("Delete remains explicit without AI requests",()->{
             Harness h=new Harness();h.setHost("abcd",1,3);h.click("⌫ Delete");equal("ad",h.host.text,"selected text removed");equal(0,h.transport.requests.size(),"no voice request");equal(0,OpenAiEnglish.requests.size(),"no translation");
         });
@@ -183,7 +238,7 @@ public final class CompactServiceTest {
         });
         System.out.println("PASS actual compact auto-insert service: "+cases+" cases, "+assertions+" assertions (synthetic boundaries only)");
     }
-    static void run(String name,Checked test)throws Exception{SharedPreferences.provider="gemini";SecureSettings.reset();OpenAiEnglish.requests.clear();try{test.run();cases++;System.out.println("PASS "+name);}catch(Throwable failure){throw new AssertionError("FAIL "+name+": "+failure.getMessage(),failure);}finally{for(Harness h:harnesses){h.service.onDestroy();if(h.recorder.file!=null)h.recorder.file.delete();}harnesses.clear();}}
+    static void run(String name,Checked test)throws Exception{SharedPreferences.provider="gemini";SecureSettings.reset();OpenAiEnglish.reset();try{test.run();cases++;System.out.println("PASS "+name);}catch(Throwable failure){throw new AssertionError("FAIL "+name+": "+failure.getMessage(),failure);}finally{for(Harness h:harnesses){h.service.onDestroy();if(h.recorder.file!=null)h.recorder.file.delete();}harnesses.clear();OpenAiEnglish.duringRewrite=null;}}
     static void check(boolean value,String reason){assertions++;if(!value)throw new AssertionError(reason);}
     static void equal(Object expected,Object actual,String reason){check(Objects.equals(expected,actual),reason+"; expected="+expected+", actual="+actual);}
     static Object field(Object target,String name)throws Exception{Field f=target.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(target);}

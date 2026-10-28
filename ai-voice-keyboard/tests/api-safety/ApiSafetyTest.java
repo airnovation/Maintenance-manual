@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ThreadPoolExecutor;
 import javax.net.ssl.SSLException;
 
 /** Actual transports, fake Android/JSON DOM/HTTP only. No real key, socket or provider. */
@@ -35,6 +36,7 @@ public final class ApiSafetyTest {
         executor(AudioTranscriber.class, "IO")
     };
     private static int checks, cases, fixtures;
+    private static Result pendingResult;
     private enum Route { GEMINI_EN, OPENAI_EN, GEMINI_SPEECH, OPENAI_SPEECH }
 
     public static void main(String[] args) throws Exception {
@@ -120,8 +122,8 @@ public final class ApiSafetyTest {
         check(!payload.contains(KEY), "key absent from request body");
         if (route == Route.GEMINI_EN || route == Route.OPENAI_EN) {
             check(payload.contains(PRIVATE), "only explicit input forwarded for EN");
-            check(payload.contains("NATURAL, CONCISE everyday English"), "legacy EN instructions retained");
-            for (String rule : new String[]{"natural conversational phrasing", "stiff word-for-word", "ordinary contractions", "negation", "uncertainty", "commitments", "place names and relative dates", "AM/PM", "AJB and PSA", "never expand them by guessing", "not yet confirmed is not a promise", "quoted requests and instructions"})
+            check(payload.contains(EnglishRewritePolicy.INSTRUCTION), "shared meaning-first EN policy supplied");
+            for (String rule : new String[]{"complete meaning", "friendly", "ordinary contractions", "negation", "uncertainty", "commitments", "relative dates", "AM/PM", "AJB and PSA", "never expand them by guessing", "not yet confirmed is not a promise", "quoted requests and instructions"})
                 check(payload.contains(rule), "EN prompt contract: " + rule);
         }
         check(conn.outputClosed, "request output closed"); end(1);
@@ -168,6 +170,7 @@ public final class ApiSafetyTest {
     private static boolean isGemini(Route route) { return route == Route.GEMINI_EN || route == Route.GEMINI_SPEECH; }
     private static Result call(Route route, String key) throws Exception {
         Result result = new Result();
+        pendingResult = result;
         switch (route) {
             case GEMINI_EN: GeminiEnglish.rewrite(key, PRIVATE, result::done); break;
             case OPENAI_EN: OpenAiEnglish.rewrite(key, PRIVATE, result::done); break;
@@ -206,7 +209,22 @@ public final class ApiSafetyTest {
         check(Handler.pendingCount() == 0, "callbacks drained"); NETWORK.verify(requests);
     }
     private static void finish() throws Exception {
-        for (ExecutorService worker : WORKERS) worker.submit(() -> { }).get(5, TimeUnit.SECONDS);
+        long callbackDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (pendingResult != null && pendingResult.count == 0) {
+            Handler.drain();
+            if (System.nanoTime() >= callbackDeadline) throw new AssertionError("API callback did not arrive");
+            Thread.yield();
+        }
+        for (ExecutorService worker : WORKERS) {
+            if (worker instanceof ThreadPoolExecutor) {
+                ThreadPoolExecutor pool = (ThreadPoolExecutor) worker;
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                while (pool.getActiveCount() != 0) {
+                    if (System.nanoTime() >= deadline) throw new AssertionError("EN worker did not finish");
+                    Thread.yield();
+                }
+            } else worker.submit(() -> { }).get(5, TimeUnit.SECONDS);
+        }
         Handler.drain();
     }
     private static ExecutorService executor(Class<?> owner, String name) {

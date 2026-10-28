@@ -30,6 +30,7 @@ public class VoiceKeyboardService extends InputMethodService {
     private final VoiceDraftSession session = new VoiceDraftSession();
     private final VoiceEditorBinding editorBinding = new VoiceEditorBinding();
     private VoiceDraftTransport transport;
+    private EnglishRequest englishRequest;
     private AssistantRecorder recorder;
     private TextView status;
     private Button mic, improve, delete, keyboard;
@@ -343,8 +344,13 @@ public class VoiceKeyboardService extends InputMethodService {
             if (inserted) reset("英文已填入。请核对后手动发送。");
             else reset("输入框未接受替换。请查看原文，再重新点EN。");
         };
-        if ("gemini".equals(provider)) GeminiEnglish.rewrite(key, original.source().trim(), callback::done);
-        else OpenAiEnglish.rewrite(key, original.source().trim(), callback);
+        EnglishRequest request = "gemini".equals(provider)
+                ? GeminiEnglish.rewrite(key, original.source().trim(), callback::done)
+                : OpenAiEnglish.rewrite(key, original.source().trim(), callback);
+        // A provider callback or editor lifecycle may run before dispatch returns.
+        // Never attach that old request to a finished or newer editor operation.
+        if (destroyed || token != generation || phase != Phase.TRANSLATING) request.cancel();
+        else englishRequest = request;
     }
 
     // Only translate() calls this. Voice capture, completion and insertion never read host text.
@@ -497,6 +503,9 @@ public class VoiceKeyboardService extends InputMethodService {
         session.invalidate();
         voiceToken = -1;
         phase = Phase.IDLE;
+        EnglishRequest pendingEnglish = englishRequest;
+        englishRequest = null;
+        if (pendingEnglish != null) pendingEnglish.cancel();
         if (recorder != null) recorder.cancel();
         if (transport != null) transport.cancel();
         voiceCursor = -1;

@@ -3,6 +3,8 @@ set -eu
 cd "$(dirname "$0")/.."
 python3 tests/check-compact-boundaries.py
 sh tests/api-safety/run-tests.sh
+sh tests/english-policy/run-tests.sh
+sh tests/english-transport/run-tests.sh
 sh tests/voice-draft/run-tests.sh
 sh tests/voice-editor/run-tests.sh
 sh tests/recorder/run-tests.sh

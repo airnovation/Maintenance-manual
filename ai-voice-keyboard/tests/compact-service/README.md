@@ -12,6 +12,7 @@ The production `VoiceKeyboardService`, `VoiceDraftSession`, `VoiceEditorBinding`
 - Known and initially unknown composing text, synchronous clear, changed cursor/range/composition/lifecycle, queued clear/commit updates, failed finalization and uncertain commits are covered.
 - Duplicate/stale results, malformed outputs, no implicit revision, API key/provider guards, recording errors, cancellation and the 60-second no-upload limit.
 - EN still reads explicitly requested selected/full editor text and replaces it only if its source and cursor remain unchanged. EN finalizes composition before reading the authoritative source and again before replacement. Changed or failed EN results have no fallback UI.
+- EN lifecycle/reset exits cancel and release the active provider request. Both providers cover reset-then-new-EN, repeated taps, changed text/selection/editor, stale success/error callbacks, and synchronous/reentrant dispatch completion. The translation fake deliberately permits callbacks after cancellation so the service's stale-result guard is tested independently of transport cancellation.
 - Synchronous editor changes during extraction, selection, finalization, commit or Delete cannot repopulate a new editor or redirect a fallback Delete action.
 
 ## Observation boundary
