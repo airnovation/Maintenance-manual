@@ -6,8 +6,8 @@ android {
         applicationId 'com.airnovation.aivoicekeyboard'
         minSdk 26
         targetSdk 35
-        versionCode 20
-        versionName '0.20-compact-theme'
+        versionCode 21
+        versionName '0.21.0'
     }
     buildFeatures { buildConfig true }
     compileOptions {

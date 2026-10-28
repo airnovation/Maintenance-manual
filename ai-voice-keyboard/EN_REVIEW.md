@@ -1,6 +1,10 @@
 # EN meaning and cancellation review patch — not a released build
 
-## Authorized validation branch
+## Latest scope
+
+The user subsequently requested the formal production package instead of an independent test app. See `PRODUCTION_VALIDATION.md` for version 0.21.0/code 21 and the unsigned `com.airnovation.aivoicekeyboard` validation. The isolated-package notes below describe the preceding completed validation stage, not the current requested artifact.
+
+## Earlier authorized validation branch
 
 After the local review stage documented below, the user authorized publishing this patch to a new, independent validation branch and running Android validation only. `validate-en-review.yml` targets only `validation/en-meaning-cancellation-20261028`, uses read-only repository permissions, and disables signing for the isolatedTest build solely through a temporary Gradle init script. It verifies the unchanged `.assistanttest` identity and retains an unsigned, non-installable APK plus reports. It cannot publish a release or install the application. The original prototype/main branches and both release workflows are unchanged. CI results must be checked for the exact new commit; this note does not assert they passed.
 

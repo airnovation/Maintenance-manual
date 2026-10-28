@@ -1,4 +1,4 @@
-name: Validate EN review - unsigned APK only
+name: Validate formal EN update - unsigned APK only
 
 on:
   push:
@@ -48,35 +48,35 @@ jobs:
           allprojects { p ->
               p.plugins.withId('com.android.application') {
                   p.extensions.getByName('androidComponents').finalizeDsl { androidDsl ->
-                      androidDsl.buildTypes.getByName('isolatedTest').signingConfig = null
+                      androidDsl.buildTypes.getByName('release').signingConfig = null
                   }
               }
           }
           gradle.taskGraph.whenReady { graph ->
               // AGP writes version metadata even for unsigned APKs; it does not sign.
               def forbidden = graph.allTasks.findAll {
-                  it.name.toLowerCase().contains('sign') && it.name != 'writeIsolatedTestSigningConfigVersions'
+                  it.name.toLowerCase().contains('sign') && it.name != 'writeReleaseSigningConfigVersions'
               }
               if (!forbidden.empty) {
                   throw new GradleException('Signing tasks are forbidden in EN validation: ' + forbidden*.path)
               }
               def app = gradle.rootProject.project(':app')
-              if (app.extensions.getByName('android').buildTypes.getByName('isolatedTest').signingConfig != null) {
+              if (app.extensions.getByName('android').buildTypes.getByName('release').signingConfig != null) {
                   throw new GradleException('The validation build must have no signing configuration')
               }
           }
           GRADLE
-      - name: Compile, lint and build unsigned isolated-package APK
+      - name: Compile, lint and build unsigned formal-package APK
         run: |
           export ANDROID_USER_HOME="$RUNNER_TEMP/en-validation-android"
           test -z "${AE_SIGNING_FILE:-}"
           gradle -p ai-voice-keyboard -I "$RUNNER_TEMP/en-unsigned.init.gradle" \
-            :app:compileIsolatedTestJavaWithJavac :app:lintIsolatedTest :app:assembleIsolatedTest --no-daemon
+            :app:compileReleaseJavaWithJavac :app:lintRelease :app:assembleRelease --no-daemon
       - name: Verify unsigned APK identity and hash
         run: |
           python3 - <<'PY'
           import hashlib, json, os, pathlib, re, subprocess, zipfile
-          apks=list(pathlib.Path('ai-voice-keyboard/app/build/outputs/apk/isolatedTest').glob('*.apk'))
+          apks=list(pathlib.Path('ai-voice-keyboard/app/build/outputs/apk/release').glob('*.apk'))
           assert len(apks)==1, 'Expected one unsigned APK'
           apk=apks[0]
           build_tools=pathlib.Path(os.environ['ANDROID_HOME'])/'build-tools/35.0.0'
@@ -84,9 +84,9 @@ jobs:
           package_lines=re.findall(r'^package: (.+)$', badging, re.M)
           assert len(package_lines)==1, 'Expected one package declaration'
           fields=dict(re.findall(r"([A-Za-z]+)='([^']*)'", package_lines[0]))
-          assert fields.get('name') == 'com.airnovation.aivoicekeyboard.assistanttest'
-          assert fields.get('versionCode') == '20'
-          assert fields.get('versionName') == '0.20-compact-theme-isolated-test'
+          assert fields.get('name') == 'com.airnovation.aivoicekeyboard'
+          assert fields.get('versionCode') == '21'
+          assert fields.get('versionName') == '0.21.0'
           assert 'application-debuggable' not in badging
           signature=subprocess.run([str(build_tools/'apksigner'), 'verify', str(apk)], capture_output=True, text=True)
           assert signature.returncode != 0, 'Validation APK must not be signed'
@@ -98,8 +98,8 @@ jobs:
                              for name in archive.namelist()), 'JAR signing entries are forbidden'
           assert not list(apk.parent.glob('*.idsig')), 'External v4 signing data is forbidden'
           assert not (pathlib.Path(os.environ['RUNNER_TEMP'])/'en-validation-android/debug.keystore').exists()
-          metadata={'commit':os.environ['GITHUB_SHA'], 'package':'com.airnovation.aivoicekeyboard.assistanttest',
-                    'versionCode':20, 'versionName':'0.20-compact-theme-isolated-test', 'unsigned':True,
+          metadata={'commit':os.environ['GITHUB_SHA'], 'package':'com.airnovation.aivoicekeyboard',
+                    'versionCode':21, 'versionName':'0.21.0', 'unsigned':True,
                     'not_installable':True, 'apk':apk.name, 'sha256':hashlib.sha256(apk.read_bytes()).hexdigest()}
           target=apk.parent/'validation-metadata.json'
           target.write_text(json.dumps(metadata, indent=2)+'\n')
@@ -108,10 +108,10 @@ jobs:
       - name: Retain validation reports and unsigned non-installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: en-validation-unsigned-${{ github.sha }}
+          name: en-formal-validation-unsigned-${{ github.sha }}
           path: |
-            ai-voice-keyboard/app/build/outputs/apk/isolatedTest/*.apk
-            ai-voice-keyboard/app/build/outputs/apk/isolatedTest/validation-metadata.json
-            ai-voice-keyboard/app/build/reports/lint-results-isolatedTest.*
+            ai-voice-keyboard/app/build/outputs/apk/release/*.apk
+            ai-voice-keyboard/app/build/outputs/apk/release/validation-metadata.json
+            ai-voice-keyboard/app/build/reports/lint-results-release.*
           if-no-files-found: error
           retention-days: 7

@@ -8,8 +8,8 @@ import shutil
 import subprocess
 
 PACKAGE = 'com.airnovation.aivoicekeyboard.assistanttest'
-VERSION_CODE = '20'
-VERSION_NAME = '0.20-compact-theme-isolated-test'
+VERSION_CODE = '21'
+VERSION_NAME = '0.21.0-isolated-test'
 LABEL = 'AI Voice Keyboard - Isolated Test'
 
 def validate(badging, signer, commit, run_id):
